@@ -13,13 +13,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-NAME = 'pyscf-core-valence-tddft'
+NAME = 'core-spec-pyscf'
 AUTHOR = 'Nathan Gillispie'
 AUTHOR_EMAIL = 'nwgllspe@memphis.edu'
 DESCRIPTION  = 'PySCF extension for easier access to core-level spectroscopy calculations'
 SO_EXTENSIONS = {
 }
-DEPENDENCIES = ['pyscf', 'numpy']
+DEPENDENCIES = ['pyscf', 'numpy', 'scipy']
 
 #######################################################################
 # Unless not working, nothing below needs to be changed.

@@ -1,8 +1,6 @@
 # Core-valence separation for TDDFT in [PySCF](https://github.com/pyscf/pyscf)
 - Version 0.0
 
-# 🚧 Under construction 🚧
-
 ## Purpose
 
 Core spectroscopy often involves excitations from a relatively small number of core orbitals. This is a huge advantage for linear response Time-Dependent Density Functional Theory (TDDFT) since you only need to consider core and valence orbitals. This is an application of core-valence separation. The theory behind this extends beyond response theory, but basically, core orbitals and valence orbitals have such vastly different localizations and energies that they are separable in the Schrödinger equation to good approximation.[^1]
@@ -19,9 +17,11 @@ PySCF already contains the framework for TDDFT. However, two things are inconven
 
 ## Installation
 
+The recommended installation method is to use `pip` with some kind of virtual environment (venv, conda, etc.)
+
 ### Pip
 
-After installing PySCF: `pip install git+https://github.com/pyscf/`, install to your `site-packages` folder. `python -m site`
+After installing PySCF, install this plugin with
 
 ```
 pip install git+https://github.com/NathanGillispie/core-valence-tddft.git
@@ -35,12 +35,8 @@ It's highly recommended to use a virtual environment, or install locally with `p
 
 If using `conda`, use the `pip` installed in your environment. The steps should be the same as above. Some call this "bad practice", I call it time spent *not* running core-valence separated TDDFT calculations.
 
-### Custom install
+### Source build
 
-After [installing and building](https://pyscf.org/user/install.html#build-from-source) PySCF, add the `pyscf/cvs` folder to `pyscf_base_dir/pyscf`. You may also add `pyscf/csv` to the `PYSCF_EXT_PATH` environment variable:
-```
-# Set pyscf extended module path
-echo 'export PYSCF_EXT_PATH=/home/abc/local/path:$PYSCF_EXT_PATH' >> ~/.bashrc
-```
+This should only be done if you know what you're doing. After [installing and building](https://pyscf.org/user/install.html#build-from-source) PySCF, test your installation ;) then copy the [pyscf/cvs](/pyscf/cvs/__init__.py) folder to the `pyscf` folder in your pyscf install. You may also add this repo to the `PYSCF_EXT_PATH` environment variable, but be warned, this variable will cause problems for pip installations of PySCF packages. Don't forget to run the tests again...
 
 You can find more details in the [extensions](https://pyscf.org/user/extensions.html#how-to-install-extensions) page of the [PySCF website](https://pyscf.org).
