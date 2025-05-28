@@ -1,5 +1,12 @@
-# Core-valence separation for TDDFT in [PySCF](https://github.com/pyscf/pyscf)
-- Version 0.0
+# Core spectroscopy for [PySCF](https://github.com/pyscf/pyscf)
+[![pytest](https://github.com/NathanGillispie/core-valence-tddft/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/NathanGillispie/core-valence-tddft/actions/workflows/ci.yml)
+`Version 0.0`
+
+**TODO:**
+- [x] Implement ZORA
+- [ ] Add Core-valence separation
+- [ ] Add option for davidson diagonalization
+- [ ] Add better documentation and tests
 
 ## Purpose
 
@@ -14,6 +21,16 @@ PySCF already contains the framework for TDDFT. However, two things are inconven
 [^1]: Cederbaum, L. S.; Domcke, W.; Schirmer, J. Many-Body Theory of Core Holes. _Phys. Rev. A_ **1980**, _22_ (1), 206–222. [doi.org/10.1103/PhysRevA.22.206](https://doi.org/10.1103/PhysRevA.22.206).
 
 [^2]: Pak, S.; Nascimento, D. R. The Role of the Coupling Matrix Elements in Time-Dependent Density Functional Theory on the Simulation of Core-Level Spectra of Transition Metal Complexes. _Electron. Struct._ **2024**, _6_ (1), 015014. [doi.org/10.1088/2516-1075/ad2693](https://doi.org/10.1088/2516-1075/ad2693).
+
+## ZORA Usage
+
+The Zeroth-Order Regular Approximation (ZORA) can be accessed on any object by running the `zora` method on any HF/KS object.
+```py
+import pyscf.zora
+mf = scf.RHF(mol).zora()
+mf.kernel()
+```
+It works by replacing the core Hamiltonian of the SCF object with it's scalar relativistic counterpart.
 
 ## Installation
 
