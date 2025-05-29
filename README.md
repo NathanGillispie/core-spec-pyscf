@@ -3,9 +3,10 @@ This is a work in process, and mostly for myself because I have tons of the same
 
 **TODO:**
 - [x] Implement ZORA
-- [ ] Add Core-valence separation
-- [ ] Option for davidson diagonalization
-- [ ] Documentation
+- [x] Add Core-valence separation
+- [ ] Option for direct diagonalization of A/B matricies
+- [ ] Option to disable $f_\text{xc}$ term
+- [ ] Better documentation
 - [ ] More tests
 
 ## Background
@@ -13,22 +14,37 @@ Core spectroscopy often involves excitations from a relatively small number of c
 
 PySCF already contains a good framework for TDDFT calculations. However, two things are inconvenient for core-level spectroscopy:
 
-1. **Davidson diagonalization** is comically slow, around 100x slower than direct diagonalization under conditions relevant to our work. The number of excitations (occupied times virtual) is relatively small. For example, the K-edge spectrum of closed-shell systems can involve excitations out of one (1) occupied orbital. Also, we often require hundreds of states in our TDDFT calculations, sometimes around half of the total number of excitations. Performing a direct diagonalization using `linalg.eigh` is simply the better option here.
+1. **Davidson diagonalization** is comically slow, around 100x slower than direct diagonalization under conditions relevant to our work. The number of excitations (occupied times virtual) is relatively small. For example, the K-edge spectrum of closed-shell systems can involve excitations out of one (1) occupied orbital. Also, we often require hundreds of states in our TDDFT calculations, sometimes around half of the total number of excitations. Performing a **direct diagonalization** using `*.linalg.eigh` is simply the better option here.
 
 2. **Exchange and correlation** terms are often the most computationally expensive part of response TDDFT calculations. However, recent results from Pak and Nascimento[^2] show that the term is unnecessary for qualitatively-accurate X-ray absorption spectra. Also, the exclusion of the $f_\text{xc}$ term would remove the warning when using non-local correlation functionals (present at the time of writing).
 
 3. **No ZORA.** The best scalar-relativistic correction.[^3]
 
-## ZORA Usage
+## Usage
 The Zeroth-Order Regular Approximation (ZORA) can be applied to any HF/KS object by appending the `zora` method.
 ```py
 from pyscf import gto, scf
 import pyscf.zora
 mol = gto.M(...)
-mf = scf.RHF(mol).zora()
+mf = scf.RHF(mol).zora() # wow! so easy
 mf.run()
 ```
 It works by replacing the core Hamiltonian of the SCF object with its scalar-relativistic counterpart.
+
+You can specify excitations out of core orbitals by adding a `core_idx` attribute to the TDHF/TDDFT object after importing `pyscf.cvs`.
+```py
+from pyscf import gto, dft
+from pyscf.tdscf import TDHF
+import pyscf.cvs
+mol = gto.M(...)
+mf = dft.UKS(mol).run()
+
+tdobj = TDDFT(mf)
+tdobj.nstates = 80
+tdobj.core_idx = ([0,1,2], [0,1,2]) # wow! so easy
+tdobj.kernel()
+```
+In the above example, excitations out of the alpha and beta orbitals are specified in a tuple. Note that this technique is destructive to your SCF object. I might fix that later.
 
 ## Installation
 The recommended installation method is to use `pip` with some kind of virtual environment (venv, conda, etc.)
@@ -57,8 +73,9 @@ This should only be done if you know what you're doing. After [installing and bu
 ```sh
 pip install -e ./core-spec-tddft
 ```
+Also, you can run some basic tests with `pytest`.
 
-You can find more details in the [extensions](https://pyscf.org/user/extensions.html#how-to-install-extensions) page of the [PySCF website](https://pyscf.org).
+You can find details on other extensions in the [extensions](https://pyscf.org/user/extensions.html#how-to-install-extensions) page of the [PySCF website](https://pyscf.org).
 
 [^1]: Cederbaum, L. S.; Domcke, W.; Schirmer, J. Many-Body Theory of Core Holes. _Phys. Rev. A_ **1980**, _22_ (1), 206–222. [doi.org/10.1103/PhysRevA.22.206](https://doi.org/10.1103/PhysRevA.22.206).
 

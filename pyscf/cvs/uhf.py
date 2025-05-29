@@ -10,22 +10,20 @@ def core_valence(self, core_idx=None):
     if hasattr(self, 'core_idx'):
         core_idx = self.core_idx
     if core_idx is None:
-        raise RuntimeError('Core orbitals not specified')
+        # Happens only when a user calls this function
+        raise RuntimeWarning('Core orbitals not specified. Use the core_idx attribute.')
+        return
 
     self.check_sanity() # scf object exists and ran
     scf = self._scf
 
-    try:
-        len(core_idx)
-    except Exception as e:
-        raise RuntimeError('core_idx must be in the form (idx_alpha, idx_beta)')
-    assert len(core_idx) == 2
+    if len(core_idx) != 2:
+        raise ValueError('core_idx must be in the form (idx_alpha, idx_beta)')
 
     if type(core_idx[0]) is int and type(core_idx[1]) is int:
         core_idx = ([core_idx[0]], [core_idx[1]])
 
     core_idx = numpy.asarray(core_idx)
-    scf.mol.nelec = (len(core_idx[0]), len(core_idx[1]))
 
     occ_idx = (numpy.where(scf.mo_occ[0]!=0), numpy.where(scf.mo_occ[1]!=0))
 
@@ -33,21 +31,24 @@ def core_valence(self, core_idx=None):
             not all(numpy.isin(core_idx[1], occ_idx[1])):
         print('Listed core orbitals aren\'t even occupied!')
 
-    delete_a = numpy.setxor1d(occ_idx[0], core_idx[0])
+    # We only want to nuke the beta orbitals because we want to have the same number
+    # alpha and beta orbitals
     delete_b = numpy.setxor1d(occ_idx[1], core_idx[1])
 
-    occa = np.delete(mf.mo_occ[0], delete_a, 0)
-    occb = np.delete(mf.mo_occ[1], delete_b, 0)
+    occa = numpy.delete(scf.mo_occ[0], delete_b, 0)
+    occb = numpy.delete(scf.mo_occ[1], delete_b, 0)
 
-    Ca = np.delete(mf.mo_coeff[0], delete_a, axis=1)
-    Cb = np.delete(mf.mo_coeff[1], delete_b, axis=1)
+    scf.mol.nelec = ((occa!=0).sum(), (occb!=0).sum())
 
-    ea = np.delete(mf.mo_energy[0], delete_a, 0)
-    eb = np.delete(mf.mo_energy[1], delete_b, 0)
+    Ca = numpy.delete(scf.mo_coeff[0], delete_b, axis=1)
+    Cb = numpy.delete(scf.mo_coeff[1], delete_b, axis=1)
 
-    mf.mo_coeff = (Ca, Cb)
-    mf.mo_occ = (occa, occb)
-    mf.mo_energy = (ea, eb)
+    ea = numpy.delete(scf.mo_energy[0], delete_b, 0)
+    eb = numpy.delete(scf.mo_energy[1], delete_b, 0)
+
+    scf.mo_coeff = (Ca, Cb)
+    scf.mo_occ = (occa, occb)
+    scf.mo_energy = (ea, eb)
 
 
 def kernel(self, **kwargs):
@@ -57,6 +58,7 @@ def kernel(self, **kwargs):
     if hasattr(self, 'core_idx'):
         self.core_valence()
 
+    # TODO: deep copy the mo_coeff, etc. objects so this isn't destructive
     self._old_kernel(**kwargs)
 
 
