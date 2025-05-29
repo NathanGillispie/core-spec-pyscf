@@ -1,11 +1,10 @@
 '''
-Core spectroscopy utilities:
- - ZORA approximation
-TODO:
- - Core-valence separation for TDDFT
- - Davidson diagonalization
+Zeroth-Order Regular Approximation (ZORA) can be applied to any HF/KS
+object by appending the zora method:
+
+>>> mf = scf.RHF(mol).zora()
+>>> mf.run()
 '''
 
-__version__ = '0.0.0'
+from pyscf.zora import ZORA
 
-from . import ZORA

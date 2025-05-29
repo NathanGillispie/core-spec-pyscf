@@ -1,20 +1,18 @@
 # Core spectroscopy for [PySCF](https://github.com/pyscf/pyscf)
-This is a work in process, and mostly for myself because I have tons of the same code scattered everywhere. I thought it would be super convenient to just pip install a plugin.
+[![pytest](https://github.com/NathanGillispie/core-spec-pyscf/actions/workflows/ci.yml/badge.svg)](https://github.com/NathanGillispie/core-spec-pyscf/actions/workflows/ci.yml)
 
-**TODO:**
-- [x] Implement ZORA
-- [x] Add Core-valence separation
-- [ ] Option for direct diagonalization of A/B matricies
+**🚧TODO🚧**
+- [x] ZORA
+- [x] Core-valence separation for TDA/RPA
+- [ ] Option for direct diagonalization of AB matrices
 - [ ] Option to disable $f_\text{xc}$ term
-- [ ] Better documentation
-- [ ] More tests
 
 ## Background
-Core spectroscopy often involves excitations from a relatively small number of core orbitals. This is a huge advantage for linear response Time-Dependent Density Functional Theory (TDDFT) since you only need to consider core and valence orbitals. This is an application of core-valence separation. The theory behind this extends beyond response theory, but basically, core orbitals and valence orbitals have such vastly different localizations and energies that they are separable in the Schrödinger equation to good approximation.[^1]
+Core spectroscopy often involves excitations from a relatively small number of core orbitals. This is a huge advantage for linear response Time-Dependent Density Functional Theory (TDDFT) since you can imagine your core electrons as the entire occupied space. This is an application of core-valence separation. The theory behind this extends beyond response theory, but basically, core orbitals and valence orbitals have such vastly different localizations and energies that they are separable in the Schrödinger equation to good approximation.[^1]
 
-PySCF already contains a good framework for TDDFT calculations. However, two things are inconvenient for core-level spectroscopy:
+PySCF provides a good basis for TDDFT calculations. However, some things are inconvenient for core-level spectroscopy:
 
-1. **Davidson diagonalization** is comically slow, around 100x slower than direct diagonalization under conditions relevant to our work. The number of excitations (occupied times virtual) is relatively small. For example, the K-edge spectrum of closed-shell systems can involve excitations out of one (1) occupied orbital. Also, we often require hundreds of states in our TDDFT calculations, sometimes around half of the total number of excitations. Performing a **direct diagonalization** using `*.linalg.eigh` is simply the better option here.
+1. **Davidson diagonalization** is comically slow, around 100x slower than direct diagonalization under conditions relevant to our work. The number of excitations (occupied times virtual) is relatively small. For example, the K-edge spectrum of closed-shell systems can involve excitations out of one (1) occupied orbital. Also, we often require hundreds of states in our TDDFT calculations, sometimes around half of the total number of excitations. A **direct diagonalization** of the AB matrices using `*.linalg.eigh` is simply the better option here.
 
 2. **Exchange and correlation** terms are often the most computationally expensive part of response TDDFT calculations. However, recent results from Pak and Nascimento[^2] show that the term is unnecessary for qualitatively-accurate X-ray absorption spectra. Also, the exclusion of the $f_\text{xc}$ term would remove the warning when using non-local correlation functionals (present at the time of writing).
 
@@ -34,17 +32,17 @@ It works by replacing the core Hamiltonian of the SCF object with its scalar-rel
 You can specify excitations out of core orbitals by adding a `core_idx` attribute to the TDHF/TDDFT object after importing `pyscf.cvs`.
 ```py
 from pyscf import gto, dft
-from pyscf.tdscf import TDHF
+from pyscf.tdscf import TDA, TDDFT, TDHF # etc.
 import pyscf.cvs
 mol = gto.M(...)
-mf = dft.UKS(mol).run()
+mf = dft.RKS(mol).run()
 
 tdobj = TDDFT(mf)
 tdobj.nstates = 80
-tdobj.core_idx = ([0,1,2], [0,1,2]) # wow! so easy
+tdobj.core_idx = [0,1,2] # wow! so easy
 tdobj.kernel()
 ```
-In the above example, excitations out of the alpha and beta orbitals are specified in a tuple. Note that this technique is destructive to your SCF object. I might fix that later.
+For unrestricted references, excitations out of the alpha and beta orbitals are specified in a tuple. Note that this is destructive to the SCFs `mo_coeff`, `mo_occ`, `mo_energy` and MOLs `nelec`. I might fix that later.
 
 ## Installation
 The recommended installation method is to use `pip` with some kind of virtual environment (venv, conda, etc.)
