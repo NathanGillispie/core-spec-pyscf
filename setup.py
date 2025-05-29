@@ -17,16 +17,12 @@ NAME = 'core-spec-pyscf'
 AUTHOR = 'Nathan Gillispie'
 AUTHOR_EMAIL = 'nwgllspe@memphis.edu'
 DESCRIPTION  = 'PySCF extension for easier access to core-level spectroscopy calculations'
-SO_EXTENSIONS = {
-}
-DEPENDENCIES = ['pyscf', 'numpy', 'scipy']
 
 #######################################################################
 # Unless not working, nothing below needs to be changed.
 metadata = globals()
 import os
-import sys
-from setuptools import setup, find_namespace_packages, Extension
+from setuptools import setup, find_namespace_packages
 
 topdir = os.path.abspath(os.path.join(__file__, '..'))
 modules = find_namespace_packages(include=['pyscf.*'])
@@ -45,44 +41,13 @@ def guess_version():
 if not metadata.get('VERSION', None):
     VERSION = guess_version()
 
-pyscf_lib_dir = os.path.join(topdir, 'pyscf', 'lib')
-def make_ext(pkg_name, srcs,
-             libraries=[], library_dirs=[pyscf_lib_dir],
-             include_dirs=[], extra_compile_flags=[],
-             extra_link_flags=[], **kwargs):
-    if sys.platform.startswith('darwin'):  # OSX
-        from distutils.sysconfig import get_config_vars
-        conf_vars = get_config_vars()
-        conf_vars['LDSHARED'] = conf_vars['LDSHARED'].replace('-bundle', '-dynamiclib')
-        conf_vars['CCSHARED'] = " -dynamiclib"
-        conf_vars['EXT_SUFFIX'] = '.dylib'
-        soname = pkg_name.split('.')[-1]
-        extra_link_flags = extra_link_flags + ['-install_name', f'@loader_path/{soname}.dylib']
-        runtime_library_dirs = []
-    else:
-        extra_compile_flags = extra_compile_flags + ['-fopenmp']
-        extra_link_flags = extra_link_flags + ['-fopenmp']
-        runtime_library_dirs = ['$ORIGIN', '.']
-    os.path.join(topdir, *pkg_name.split('.')[:-1])
-    return Extension(pkg_name, srcs,
-                     libraries = libraries,
-                     library_dirs = library_dirs,
-                     include_dirs = include_dirs + library_dirs,
-                     extra_compile_args = extra_compile_flags,
-                     extra_link_args = extra_link_flags,
-                     runtime_library_dirs = runtime_library_dirs,
-                     **kwargs)
-
 settings = {
     'name': metadata.get('NAME', None),
     'version': VERSION,
     'description': metadata.get('DESCRIPTION', None),
     'author': metadata.get('AUTHOR', None),
     'author_email': metadata.get('AUTHOR_EMAIL', None),
-    'install_requires': metadata.get('DEPENDENCIES', []),
 }
-if 'SO_EXTENSIONS' in metadata:
-    settings['ext_modules'] = [make_ext(k, v) for k, v in SO_EXTENSIONS.items()]
 setup(
     include_package_data=True,
     packages=modules,

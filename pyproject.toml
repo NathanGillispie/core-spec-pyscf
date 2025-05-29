@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=77.0.3", "pyscf", "numpy>=1.13", "scipy>=1.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "core-spec-pyscf"
+version = "0.0"
+authors = [
+    { name="Nathan Gillispie", email="nwgllsper@memphis.edu" },
+]
+description = "PySCF extension for easier access to core-level spectroscopy calculations"
+readme = "README.md"
+requires-python = ">=3.7"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+classifiers = [
+  'Development Status :: 2 - Pre-Alpha',
+  'Intended Audience :: Science/Research',
+  'Intended Audience :: Developers',
+  'Programming Language :: Python',
+  'Topic :: Scientific/Engineering',
+  'Topic :: Scientific/Engineering :: Chemistry',
+  'Operating System :: POSIX',
+  'Operating System :: Unix',
+  'Operating System :: MacOS',
+]
+
+
+[project.urls]
+Homepage = "https://github.com/NathanGillispie/core-valence-tddft"
+Issues = "https://github.com/NathanGillispie/core-valence-tddft/issues"
