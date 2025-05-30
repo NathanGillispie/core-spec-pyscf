@@ -1,4 +1,0 @@
-include MANIFEST.in
-include README.md setup.py CHANGELOG LICENSE
-
-prune pyscf/lib/build pyscf/build

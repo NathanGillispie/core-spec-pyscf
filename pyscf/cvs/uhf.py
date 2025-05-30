@@ -54,7 +54,18 @@ def rpa_kernel(self, **kwargs):
     if hasattr(self, 'core_idx'):
         self.core_valence()
 
-    self._old_kernel(**kwargs)
+    if 'no_fxc' in kwargs.keys():
+        self.no_fxc = kwargs.pop('no_fxc')
+    if hasattr(self, 'no_fxc'):
+        if self.no_fxc:
+            raise NotImplementedError('no_fxc not in RPA kernels yet')
+
+    if 'direct_diag' in kwargs.keys():
+        self.direct_diag = kwargs.pop('direct_diag')
+    if hasattr(self, 'direct_diag'):
+        if self.direct_diag:
+            raise NotImplementedError('direct_diag not in RPA kernels yet')
+    return self._old_kernel(**kwargs)
 
 @pyscf.lib.with_doc(TDA.kernel.__doc__)
 def tda_kernel(self, **kwargs):
@@ -64,7 +75,18 @@ def tda_kernel(self, **kwargs):
     if hasattr(self, 'core_idx'):
         self.core_valence()
 
-    self._old_kernel(**kwargs)
+    if 'no_fxc' in kwargs.keys():
+        self.no_fxc = kwargs.pop('no_fxc')
+    if hasattr(self, 'no_fxc'):
+        if self.no_fxc:
+            raise NotImplementedError('no_fxc not in RHF/RKS TDA kernel yet')
+
+    if 'direct_diag' in kwargs.keys():
+        self.direct_diag = kwargs.pop('direct_diag')
+    if hasattr(self, 'direct_diag'):
+        if self.direct_diag:
+            raise NotImplementedError('direct_diag not in RHF/RKS TDA kernel yet')
+    return self._old_kernel(**kwargs)
 
 TDHF.core_valence = core_valence
 TDHF._old_kernel = TDHF.kernel

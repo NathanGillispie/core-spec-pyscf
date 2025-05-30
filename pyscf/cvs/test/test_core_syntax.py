@@ -1,4 +1,7 @@
-
+'''
+The purpose of this test is to test the syntax of core_idx.
+The option can be passed in with both the tdobj attribute and kernel keyword argument.
+'''
 import pyscf
 import pyscf.cvs
 from pyscf.tdscf import RPA, TDA
