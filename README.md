@@ -13,11 +13,16 @@ PySCF provides a good basis for TDDFT calculations. However, some things are inc
 3. **No ZORA.** The best scalar-relativistic correction.[^3]
 
 ### Details
-The ZORA correction uses a model basis. The exact values come from [NWCHEM](https://nwchemgit.github.io/).
-
-The diagonalization of Casida's equation[^4] $$\begin{pmatrix}~~\mathbf{A} & \mathbf{B} \\ \mathbf{-B}& \!\!\mathbf{-A}~\end{pmatrix} \begin{pmatrix}\mathbf{X}\\ \mathbf{Y}\end{pmatrix}= \Omega \begin{pmatrix}\mathbf{X}\\ \mathbf{Y}\end{pmatrix}$$ is best done in its hermitian form, assuming $(\mathbf{A}-\mathbf{B})$ and $(\mathbf{A}+\mathbf{B})$ are positive semi-definite: $$\begin{gather}\mathbf{CZ}=\Omega^2 \mathbf{Z}\\ \mathbf{C} = (\mathbf{A}-\mathbf{B})^{1/2}(\mathbf{A}+\mathbf{B})(\mathbf{A}-\mathbf{B})^{1/2}\\ \mathbf{Z} = (\mathbf{A}-\mathbf{B})^{1/2}(\mathbf{X}-\mathbf{Y})\end{gather}$$
-
-When removing the $f_\text{xc}$ term, the exact Hartree exchange is included, regardless of the functional used.
+- The ZORA correction uses a model basis. The exact values come from [NWCHEM](https://nwchemgit.github.io/).
+- The diagonalization of Casida's equation[^4]
+```math
+\begin{pmatrix}\mathbf{A} & \mathbf{B}\\ \mathbf{-B}&\mathbf{-A}\end{pmatrix}\begin{pmatrix}\mathbf{X}\\ \mathbf{Y}\end{pmatrix}=\Omega \begin{pmatrix}\mathbf{X}\\ \mathbf{Y}\end{pmatrix}
+```
+is done in its hermitian form, assuming $(\mathbf{A}-\mathbf{B})$ and $(\mathbf{A}+\mathbf{B})$ are positive semi-definite:
+```math
+\begin{gather}\mathbf{CZ}=\Omega^2 \mathbf{Z}\\ \mathbf{C} = (\mathbf{A}-\mathbf{B})^{1/2}(\mathbf{A}+\mathbf{B})(\mathbf{A}-\mathbf{B})^{1/2}\\ \mathbf{Z} = (\mathbf{A}-\mathbf{B})^{1/2}(\mathbf{X}-\mathbf{Y})\end{gather}
+```
+- When removing the $f_\text{xc}$ term, the exact Hartree exchange is included, regardless of the functional used.
 
 ## Usage
 The Zeroth-Order Regular Approximation (ZORA) can be applied to any HF/KS object by appending the `zora` method.
@@ -87,4 +92,4 @@ You can find details on other extensions in the [extensions](https://pyscf.org/u
 
 [^3]: In my opinion.
 
-[^4]: Casida, M. E. Time-Dependent Density Functional Response Theory for Molecules. In _Recent Advances in Density Functional Methods_; Recent Advances in Computational Chemistry; World Scientific, 1995; Vol. 1, pp 155–192. [doi.org/10.1142/9789812830586_0005](https://doi.org/10.1142/9789812830586_0005)
+[^4]: Casida, M. E. Time-Dependent Density Functional Response Theory for Molecules. In _Recent Advances in Density Functional Methods_; Recent Advances in Computational Chemistry; World Scientific, **1995**; Vol. 1, pp 155–192. [doi.org/10.1142/9789812830586_0005](https://doi.org/10.1142/9789812830586_0005)
