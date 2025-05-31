@@ -86,7 +86,7 @@ def direct_diag_rpa_kernel(self, x0=None, nstates=None):
     sqamb = sqrtm(A-B)
     if sqamb.dtype != 'float64':
         log.warn("A-B is not positive semi-definite! Results may not be accurate. Try another basis?")
-        sqamb = numpy.asarray(sqamb, dtype='float64')
+        sqamb = numpy.asarray(sqamb.real, dtype='float64')
     C = sqamb @ (A + B) @ sqamb
 
     e_squared, Z = numpy.linalg.eigh(C)
