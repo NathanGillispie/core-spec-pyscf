@@ -1,12 +1,6 @@
 # Core spectroscopy for [PySCF](https://github.com/pyscf/pyscf)
 [![pytest](https://github.com/NathanGillispie/core-spec-pyscf/actions/workflows/ci.yml/badge.svg)](https://github.com/NathanGillispie/core-spec-pyscf/actions/workflows/ci.yml)
 
-**🚧TODO🚧**
-- [x] ZORA
-- [x] Core-valence separation for TDA/RPA
-- [ ] Option for direct diagonalization of AB matrices
-- [ ] Option to disable $f_\text{xc}$ term
-
 ## Background
 Core spectroscopy often involves excitations from a relatively small number of core orbitals. This is a huge advantage for linear response Time-Dependent Density Functional Theory (TDDFT) since you can imagine your core electrons as the entire occupied space. This is an application of core-valence separation. The theory behind this extends beyond response theory, but basically, core orbitals and valence orbitals have such vastly different localizations and energies that they are separable in the Schrödinger equation to good approximation.[^1]
 
@@ -43,6 +37,16 @@ tdobj.core_idx = [0,1,2] # wow! so easy
 tdobj.kernel()
 ```
 For unrestricted references, excitations out of the alpha and beta orbitals are specified in a tuple. Note that this is destructive to the SCFs `mo_coeff`, `mo_occ`, `mo_energy` and MOLs `nelec`. I might fix that later.
+
+To disable the $f_\text{xc}$ term, set the `no_fxc` attribute or keyword argument of the `kernel` function. The same syntax is used for direct diagonalizaton (`direct_diag`). Note that `pyscf.cvs` must still be imported as all the direct diagonalization code lives there.
+```py
+import pyscf.cvs
+
+tdobj = TDHF(mf)
+tdobj.no_fxc = True
+tdobj.direct_diag = True
+tdobj.kernel()
+```
 
 ## Installation
 The recommended installation method is to use `pip` with some kind of virtual environment (venv, conda, etc.)

@@ -1,13 +1,14 @@
 import pyscf
 from pyscf.tdscf.rhf import TDHF, TDA
+from pyscf.tdscf.rks import CasidaTDDFT
 import numpy
+from scipy.linalg import sqrtm
 
 from pyscf.lib import logger
-from pyscf import ao2mo
+from .no_fxc import get_ab_no_fxc_rhf
 
 def core_valence(self, core_idx=None):
-    '''This can be manually called to perform the CVS.
-    Don't try this with something silly like fractional occupation numbers.'''
+    '''This can be manually called to perform the CVS.'''
     if hasattr(self, 'core_idx'):
         core_idx = self.core_idx
     if core_idx is None:
@@ -31,45 +32,6 @@ def core_valence(self, core_idx=None):
     scf.mo_coeff = numpy.delete(scf.mo_coeff, delete_idx, axis=1)
     scf.mo_energy = numpy.delete(scf.mo_energy, delete_idx, 0)
 
-def get_ab_no_fxc(mf, mo_energy=None, mo_coeff=None, mo_occ=None, add_hf=True):
-    r'''A and B matrices for TDDFT response function.
-
-    A[i,a,j,b] = \delta_{ab}\delta_{ij}(E_a - E_i) + (ai||jb)
-    B[i,a,j,b] = (ai||bj)
-
-    Ref: Chem Phys Lett, 256, 454
-    '''
-    if mo_energy is None: mo_energy = mf.mo_energy
-    if mo_coeff is None: mo_coeff = mf.mo_coeff
-    if mo_occ is None: mo_occ = mf.mo_occ
-    # assert (mo_coeff.dtype == numpy.double)
-
-    assert mo_coeff.dtype == numpy.float64
-    mol = mf.mol
-    nao, nmo = mo_coeff.shape
-    occidx = numpy.where(mo_occ==2)[0]
-    viridx = numpy.where(mo_occ==0)[0]
-    orbv = mo_coeff[:,viridx]
-    orbo = mo_coeff[:,occidx]
-    nvir = orbv.shape[1]
-    nocc = orbo.shape[1]
-    mo = numpy.hstack((orbo,orbv))
-
-    e_ia = mo_energy[viridx] - mo_energy[occidx,None]
-    a = numpy.diag(e_ia.ravel()).reshape(nocc,nvir,nocc,nvir)
-    b = numpy.zeros_like(a)
-
-    if add_hf:
-        eri_mo = ao2mo.general(mol, [orbo,mo,mo,mo], compact=False)
-        eri_mo = eri_mo.reshape(nocc,nmo,nmo,nmo)
-        a += numpy.einsum('iabj->iajb', eri_mo[:nocc,nocc:,nocc:,:nocc]) * 2
-        a -= numpy.einsum('ijba->iajb', eri_mo[:nocc,:nocc,nocc:,nocc:])
-
-        b += numpy.einsum('iajb->iajb', eri_mo[:nocc,nocc:,:nocc,nocc:]) * 2
-        b -= numpy.einsum('jaib->iajb', eri_mo[:nocc,nocc:,:nocc,nocc:])
-
-    return a, b
-
 def direct_diag_tda_kernel(self, x0=None, nstates=None):
     '''TDA diagonalization solver'''
     cpu0 = (logger.process_clock(), logger.perf_counter())
@@ -84,10 +46,70 @@ def direct_diag_tda_kernel(self, x0=None, nstates=None):
     log = logger.Logger(self.stdout, self.verbose)
 
     a, _ = self.get_ab()
-    nocc, nvirt, _, _ = a.shape
-    a = a.reshape(nocc*nvirt, nocc*nvirt)
+    nocc = a.shape[0]
+    nvir = a.shape[1]
+    a = a.reshape(nocc*nvir, nocc*nvir)
 
-    self.e, self.xy = numpy.linalg.eigh(a)
+    e, x1 = numpy.linalg.eigh(a)
+    self.e = numpy.extract(e > self.positive_eig_threshold, e)
+    self.xy = [(xi.reshape(nocc,nvir)*numpy.sqrt(.5),0) for xi in x1]
+    self.converged = [True]
+
+    if self.chkfile:
+        pyscf.lib.chkfile.save(self.chkfile, 'tddft/e', self.e)
+        pyscf.lib.chkfile.save(self.chkfile, 'tddft/xy', self.xy)
+
+    log.timer('TDA', *cpu0)
+    self._finalize()
+    return self.e, self.xy
+
+def direct_diag_rpa_kernel(self, x0=None, nstates=None):
+    '''TDHF/TDDFT direct-diagonalization solver'''
+    log = logger.new_logger(self)
+    cpu0 = (logger.process_clock(), logger.perf_counter())
+    self.check_sanity()
+    self.dump_flags()
+    if nstates is None:
+        nstates = self.nstates
+    else:
+        self.nstates = nstates
+    mol = self.mol
+
+    A, B = self.get_ab()
+    assert A.dtype == 'float64'
+    nocc = A.shape[0]
+    nvir = A.shape[1]
+    A = A.reshape(nocc*nvir, nocc*nvir)
+    B = B.reshape(nocc*nvir, nocc*nvir)
+
+    sqamb = sqrtm(A-B)
+    if sqamb.dtype != 'float64':
+        log.warn("A-B is not positive semi-definite! Results may not be accurate. Try another basis?")
+        sqamb = numpy.asarray(sqamb, dtype='float64')
+    C = sqamb @ (A + B) @ sqamb
+
+    e_squared, Z = numpy.linalg.eigh(C)
+    e = (e_squared)**.5
+
+    xmy = numpy.linalg.inv(sqamb) @ Z
+    xpy = sqamb @ Z # @ numpy.diag(1/e) ? that's what I worked out
+
+    X = .5 * (xpy + xmy)
+    Y = .5 * (xpy - xmy)
+    x1 = numpy.zeros((X.shape[0], X.shape[1]*2))
+    x1[:,:nocc*nvir] += X
+    x1[:,nocc*nvir:] += Y
+
+    self.e = numpy.extract(e > self.positive_eig_threshold, e)
+
+    def norm_xy(z):
+        x, y = z.reshape(2, -1)
+        norm = pyscf.lib.norm(x)**2 - pyscf.lib.norm(y)**2
+        if norm < 0:
+            log.warn('TDDFT amplitudes |X| smaller than |Y|')
+        norm = abs(.5/norm) ** .5 # normalize to 0.5 for alpha spin
+        return x.reshape(nocc,nvir)*norm, y.reshape(nocc,nvir)*norm
+    self.xy = [norm_xy(z) for z in x1]
     self.converged = [True]
 
     if self.chkfile:
@@ -110,13 +132,13 @@ def rpa_kernel(self, **kwargs):
         self.no_fxc = kwargs.pop('no_fxc')
     if hasattr(self, 'no_fxc'):
         if self.no_fxc:
-            raise NotImplementedError('no_fxc not in RPA kernels yet')
+            self.get_ab = get_ab_no_fxc_rhf
 
     if 'direct_diag' in kwargs.keys():
         self.direct_diag = kwargs.pop('direct_diag')
     if hasattr(self, 'direct_diag'):
         if self.direct_diag:
-            raise NotImplementedError('direct_diag not in RPA kernels yet')
+            return direct_diag_rpa_kernel(self, **kwargs)
     return self._old_kernel(**kwargs)
 
 @pyscf.lib.with_doc(TDA.kernel.__doc__)
@@ -131,7 +153,7 @@ def tda_kernel(self, **kwargs):
         self.no_fxc = kwargs.pop('no_fxc')
     if hasattr(self, 'no_fxc'):
         if self.no_fxc:
-            self.get_ab = get_ab_no_fxc
+            self.get_ab = get_ab_no_fxc_rhf
 
     if 'direct_diag' in kwargs.keys():
         self.direct_diag = kwargs.pop('direct_diag')
@@ -143,6 +165,10 @@ def tda_kernel(self, **kwargs):
 TDHF.core_valence = core_valence
 TDHF._old_kernel = TDHF.kernel
 TDHF.kernel = rpa_kernel
+
+CasidaTDDFT.core_valence = core_valence
+CasidaTDDFT._old_kernel = CasidaTDDFT.kernel
+CasidaTDDFT.kernel = rpa_kernel
 
 TDA.core_valence = core_valence
 TDA._old_kernel = TDA.kernel
