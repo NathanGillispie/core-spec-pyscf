@@ -1,5 +1,5 @@
 import pyscf
-from pyscf.tdscf.uhf import TDHF, TDA, REAL_EIG_THRESHOLD
+from pyscf.tdscf.uhf import TDHF, TDA
 from pyscf.tdscf.uks import CasidaTDDFT
 import numpy
 from scipy.linalg import sqrtm
@@ -7,18 +7,18 @@ from scipy.linalg import sqrtm
 from pyscf.lib import logger
 from .no_fxc import get_ab_no_fxc_uhf
 
-def core_valence(self, core_idx=None):
+def core_valence(tdobj, core_idx=None):
     '''This can be manually called to perform the CVS
     Don't try this with something silly like fractional occupation numbers.'''
-    if hasattr(self, 'core_idx'):
-        core_idx = self.core_idx
+    if hasattr(tdobj, 'core_idx'):
+        core_idx = tdobj.core_idx
     if core_idx is None:
         # Happens only when a user calls this function
         raise RuntimeWarning('Core orbitals not specified. Use the core_idx attribute.')
         return
 
-    self.check_sanity() # scf object exists and ran
-    scf = self._scf
+    tdobj.check_sanity() # scf object exists and ran
+    scf = tdobj._scf
 
     if len(core_idx) != 2:
         raise ValueError('core_idx must be in the form (idx_alpha, idx_beta)')
@@ -53,6 +53,7 @@ def core_valence(self, core_idx=None):
 
 def direct_diag_tda_kernel(self, x0=None, nstates=None):
     '''TDA diagonalization solver'''
+    log = logger.new_logger(self)
     cpu0 = (logger.process_clock(), logger.perf_counter())
     self.check_sanity()
     self.dump_flags()
@@ -60,9 +61,8 @@ def direct_diag_tda_kernel(self, x0=None, nstates=None):
         nstates = self.nstates
     else:
         self.nstates = nstates
-    log = logger.Logger(self.stdout, self.verbose)
 
-    (aa, ab, bb), _ = self.get_ab()
+    (aa, ab, bb), _ = self.get_ab(mf=self._scf)
     assert ab.dtype == 'float64'
 
     nocca, nvira, _, _ = aa.shape
@@ -83,19 +83,19 @@ def direct_diag_tda_kernel(self, x0=None, nstates=None):
     A[ova:, ova:] += bb
 
     e, x1 = numpy.linalg.eigh(A)
-    # e, x1 = numpy.linalg.eig(A)
-    # if numpy.amax(x1.imag) > REAL_EIG_THRESHOLD:
-    #     log.warn(self, 'Imaginary component too large, bad basis?')
-    # else:
-    #     x1 = numpy.asarray(x1, dtype='float64')
+
+    keep_idx = numpy.where(e > self.positive_eig_threshold)[0]
+    e = e[keep_idx]
+    x1 = x1[:,keep_idx]
+
+    self.e = e[:nstates]
+    x1 = x1[:,:nstates]
 
     self.xy = [((xi[:ova].reshape(nocca,nvira),  # X_alpha
                  xi[ova:].reshape(noccb,nvirb)), # X_beta
                 (0, 0))  # (Y_alpha, Y_beta)
-               for xi in x1]
-
+               for xi in x1.T]
     self.converged = [True]
-    self.e = numpy.extract(e > self.positive_eig_threshold, e)
 
     if self.chkfile:
         pyscf.lib.chkfile.save(self.chkfile, 'tddft/e', self.e)
@@ -115,9 +115,8 @@ def direct_diag_rpa_kernel(self, x0=None, nstates=None):
         nstates = self.nstates
     else:
         self.nstates = nstates
-    mol = self.mol
 
-    (Aaa, Aab, Abb), (Baa, Bab, Bbb) = self.get_ab()
+    (Aaa, Aab, Abb), (Baa, Bab, Bbb) = self.get_ab(mf=self._scf)
     assert Aab.dtype == 'float64'
     assert Bab.dtype == 'float64'
 
@@ -125,7 +124,7 @@ def direct_diag_rpa_kernel(self, x0=None, nstates=None):
     noccb, nvirb, _, _ = Abb.shape
 
     ova = nocca * nvira
-    ovb = ova
+    ovb = noccb * nvirb
 
     Aaa = Aaa.reshape((ova, ova))
     Aba = Aab.transpose((2,3,0,1)).reshape((ovb, ova))
@@ -157,16 +156,20 @@ def direct_diag_rpa_kernel(self, x0=None, nstates=None):
     e = (e_squared)**.5
 
     xmy = numpy.linalg.inv(sqamb) @ Z
-    xpy = sqamb @ Z
+    xpy = sqamb @ Z @ numpy.diag(1/e)
 
     X = .5 * (xpy + xmy)
     Y = .5 * (xpy - xmy)
-    x1 = numpy.zeros((X.shape[0], X.shape[1]*2))
-    x1[:,:ova*2] += X
-    x1[:,ova*2:] += Y
+    x1 = numpy.zeros(((ova+ovb)*2, ovb+ova))
+    x1[:ovb+ova] += X
+    x1[ovb+ova:] += Y
+
+    keep_idx = numpy.where(e > self.positive_eig_threshold)[0]
+    self.e = (e[keep_idx])[:nstates]
 
     xy = []
-    for i, z in enumerate(x1):
+    for i, z in enumerate(x1.T):
+        if i not in keep_idx: continue
         x, y = z.reshape(2, -1)
         norm = pyscf.lib.norm(x)**2 - pyscf.lib.norm(y)**2
         if norm < 0:
@@ -176,7 +179,7 @@ def direct_diag_rpa_kernel(self, x0=None, nstates=None):
                     x[nocca*nvira:].reshape(noccb,nvirb) * norm), # X_beta
                    (y[:nocca*nvira].reshape(nocca,nvira) * norm,  # Y_alpha
                     y[nocca*nvira:].reshape(noccb,nvirb) * norm)))# Y_beta
-    self.xy = xy
+    self.xy = xy[:nstates]
     self.converged = [True]
 
     if self.chkfile:
@@ -191,53 +194,82 @@ def direct_diag_rpa_kernel(self, x0=None, nstates=None):
 def rpa_kernel(self, **kwargs):
     '''Monkey-patched TDHF/TDDFT kernel for CVS'''
     if 'core_idx' in kwargs.keys():
-        self.core_idx = kwargs.pop('core_idx')
-    if hasattr(self, 'core_idx'):
-        self.core_valence()
+        core_idx = kwargs.pop('core_idx')
+    elif hasattr(self, 'core_idx'):
+        core_idx = self.core_idx
+    else:
+        core_idx = None
 
     if 'no_fxc' in kwargs.keys():
-        self.no_fxc = kwargs.pop('no_fxc')
-    if hasattr(self, 'no_fxc'):
-        if self.no_fxc:
-            self.get_ab = get_ab_no_fxc_uhf
+        no_fxc = kwargs.pop('no_fxc')
+    elif hasattr(self, 'no_fxc'):
+        no_fxc = self.no_fxc
+    else:
+        no_fxc = False
 
     if 'direct_diag' in kwargs.keys():
-        self.direct_diag = kwargs.pop('direct_diag')
-    if hasattr(self, 'direct_diag'):
-        if self.direct_diag:
-            return direct_diag_rpa_kernel(self, **kwargs)
-    return self._old_kernel(**kwargs)
+        direct_diag = kwargs.pop('direct_diag')
+    elif hasattr(self, 'direct_diag'):
+        direct_diag = self.direct_diag
+    else:
+        direct_diag = False
+
+    if core_idx is not None:
+        core_valence(self, core_idx=core_idx)
+    if no_fxc:
+        self.get_ab = get_ab_no_fxc_uhf
+        if not direct_diag:
+            pyscf.lib.logger.warn(self, 'No fxc requested. Using direct diagonalization.')
+            direct_diag = True
+    if direct_diag:
+        return direct_diag_rpa_kernel(self, **kwargs)
+    else:
+        return self._old_kernel(**kwargs)
 
 @pyscf.lib.with_doc(TDA.kernel.__doc__)
 def tda_kernel(self, **kwargs):
     '''Monkey-patched TDA kernel for CVS'''
     if 'core_idx' in kwargs.keys():
-        self.core_idx = kwargs.pop('core_idx')
-    if hasattr(self, 'core_idx'):
-        self.core_valence()
+        core_idx = kwargs.pop('core_idx')
+    elif hasattr(self, 'core_idx'):
+        core_idx = self.core_idx
+    else:
+        core_idx = None
 
     if 'no_fxc' in kwargs.keys():
-        self.no_fxc = kwargs.pop('no_fxc')
-    if hasattr(self, 'no_fxc'):
-        if self.no_fxc:
-            self.get_ab = get_ab_no_fxc_uhf
+        no_fxc = kwargs.pop('no_fxc')
+    elif hasattr(self, 'no_fxc'):
+        no_fxc = self.no_fxc
+    else:
+        no_fxc = False
 
     if 'direct_diag' in kwargs.keys():
-        self.direct_diag = kwargs.pop('direct_diag')
-    if hasattr(self, 'direct_diag'):
-        if self.direct_diag:
-            return direct_diag_tda_kernel(self, **kwargs)
-    return self._old_kernel(**kwargs)
+        direct_diag = kwargs.pop('direct_diag')
+    elif hasattr(self, 'direct_diag'):
+        direct_diag = self.direct_diag
+    else:
+        direct_diag = False
 
-TDHF.core_valence = core_valence
+    if core_idx is not None:
+        core_valence(self, core_idx=core_idx)
+    if no_fxc:
+        self.get_ab = get_ab_no_fxc_uhf
+        if not direct_diag:
+            pyscf.lib.logger.warn(self, 'No fxc requested. Using direct diagonalization.')
+            direct_diag = True
+    if direct_diag:
+        return direct_diag_tda_kernel(self, **kwargs)
+    else:
+        return self._old_kernel(**kwargs)
+
 TDHF._old_kernel = TDHF.kernel
 TDHF.kernel = rpa_kernel
+TDHF.core_valence = core_valence
 
-CasidaTDDFT.core_valence = core_valence
 CasidaTDDFT._old_kernel = CasidaTDDFT.kernel
 CasidaTDDFT.kernel = rpa_kernel
+CasidaTDDFT.core_valence = core_valence
 
-TDA.core_valence = core_valence
 TDA._old_kernel = TDA.kernel
 TDA.kernel = tda_kernel
-
+TDA.core_valence = core_valence

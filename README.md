@@ -13,7 +13,6 @@ PySCF provides a good basis for TDDFT calculations. However, some things are inc
 3. **No ZORA.** The best scalar-relativistic correction.[^3]
 
 ### Details
-- The ZORA correction uses a model basis. The exact values come from [NWCHEM](https://nwchemgit.github.io/).
 - The diagonalization of Casida's equation[^4]
 ```math
 \begin{pmatrix}\mathbf{A} & \mathbf{B}\\ \mathbf{-B}&\mathbf{-A}\end{pmatrix}\begin{pmatrix}\mathbf{X}\\ \mathbf{Y}\end{pmatrix}=\Omega \begin{pmatrix}\mathbf{X}\\ \mathbf{Y}\end{pmatrix}
@@ -22,7 +21,8 @@ is done in its hermitian form, assuming $(\mathbf{A}-\mathbf{B})$ and $(\mathbf{
 ```math
 \begin{gather}\mathbf{CZ}=\Omega^2 \mathbf{Z}\\ \mathbf{C} = (\mathbf{A}-\mathbf{B})^{1/2}(\mathbf{A}+\mathbf{B})(\mathbf{A}-\mathbf{B})^{1/2}\\ \mathbf{Z} = (\mathbf{A}-\mathbf{B})^{1/2}(\mathbf{X}-\mathbf{Y})\end{gather}
 ```
-- When removing the $f_\text{xc}$ term, the exact Hartree exchange is included, regardless of the functional used.
+- When removing the $f_\text{xc}$ term, the exact Hartree exchange is included, regardless of the functional used. Due to technical reasons, direct diagonalization is always used with `no_fxc`. Given the reasons above, I probably won't change this.
+- The ZORA correction uses a model basis. The exact values come from [NWCHEM](https://nwchemgit.github.io/).
 
 ## Usage
 The Zeroth-Order Regular Approximation (ZORA) can be applied to any HF/KS object by appending the `zora` method.

@@ -37,4 +37,3 @@ def test_direct_diag_rpa(ref):
 
     assert np.allclose(e1, e2)
 
-test_direct_diag_rpa('RKS')

@@ -38,9 +38,9 @@ def get_ab_no_fxc_rhf(mf=None):
     return a, b
 
 @lib.with_doc(pyscf.tdscf.uhf.get_ab.__doc__)
-def get_ab_no_fxc_uhf(self, mf=None):
+def get_ab_no_fxc_uhf(mf=None):
     if mf is None:
-        mf = self._scf
+        raise NotImplementedError("sorry")
     mo_energy = mf.mo_energy
     mo_coeff = mf.mo_coeff
     mo_occ = mf.mo_occ
@@ -103,9 +103,9 @@ def get_ab_no_fxc_uhf(self, mf=None):
 
 
 @lib.with_doc(pyscf.tdscf.ghf.get_ab.__doc__)
-def get_ab_no_fxc_ghf(self, mf=None):
+def get_ab_no_fxc_ghf(mf=None):
     if mf is None:
-        mf = self._scf
+        raise NotImplementedError("sorry")
     mo_energy = mf.mo_energy
     mo_coeff = mf.mo_coeff
     mo_occ = mf.mo_occ
