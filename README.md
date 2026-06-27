@@ -6,11 +6,15 @@ Core spectroscopy often involves excitations from a relatively small number of c
 
 PySCF provides a good basis for TDDFT calculations. However, some things are inconvenient for core-level spectroscopy:
 
-1. **Davidson diagonalization** is comically slow, around 100x slower than direct diagonalization under conditions relevant to our work, due to excitations from a small number of core orbitals. Also, we often require hundreds of states in our TDDFT calculations, outweighing the benefits of the Davidson scheme. A **direct diagonalization** of the hermitian AB matrices using `*.linalg.eigh` is simply the better option here.
+1. **Davidson diagonalization** is comically slow, around 100x slower than direct diagonalization under conditions relevant to our work, due to excitations from a small number of core orbitals. Also, we often require hundreds of states in our TDDFT calculations, outweighing the benefits of the Davidson scheme. A **direct diagonalization** of the AB matrices using `*.linalg.eigh` is simply the better option here.
 
 2. **Exchange and correlation** terms are often the most computationally expensive part of response TDDFT calculations. However, recent results from Pak and Nascimento[^2] show that the term is unnecessary for qualitatively-accurate X-ray absorption spectra.
 
 3. **No ZORA.** The best scalar-relativistic correction.[^3]
+
+4. **Quadratic response** is not available in PySCF, so no Resonant-Inelastic X-ray Scattering (RIXS) calculations.
+
+5. **No core-valence separation approximation.** Update: this was added recently as an option to specify "frozen orbitals".
 
 ### Details
 - The diagonalization of Casida's equation[^4]
@@ -23,6 +27,7 @@ is done in its hermitian form, assuming $(\mathbf{A}-\mathbf{B})$ and $(\mathbf{
 ```
 - When removing the $f_\text{xc}$ term, the exact Hartree exchange is included, regardless of the functional used. Due to technical reasons, direct diagonalization is always used with `no_fxc`. Given the reasons above, I probably won't change this.
 - The ZORA correction uses a model basis. The exact values come from [NWCHEM](https://nwchemgit.github.io/).
+- I've currently worked out quadratic response (response function and excited-state transition dipole moments) for restricted KS references. Look forward seeing it added here shortly.
 
 ## Usage
 The Zeroth-Order Regular Approximation (ZORA) can be applied to any HF/KS object by appending the `zora` method.
@@ -80,11 +85,19 @@ This should only be done if you know what you're doing. After [installing and bu
 ### Development mode
 `pip` has a handy feature called editable installations. In a virtual environment with PySCF and its dependencies, run
 ```sh
-pip install -e ./core-spec-tddft
+pip install -e ./core-spec-pyscf
 ```
 Also, you can run my tests with `pytest`.
 
 You can find details on other extensions in the [extensions](https://pyscf.org/user/extensions.html#how-to-install-extensions) page of the [PySCF website](https://pyscf.org).
+
+## TODO:
+- [ ] $\omega$-dependent Quadratic Response
+- [ ] Dipole transition moments from QR
+- [ ] 2-photon absorption
+- [ ] Option to compute $g_\text{xc}$ at once or on-the-fly
+- [x] Frozen orbitals
+- [ ] Checkpoints
 
 [^1]: Cederbaum, L. S.; Domcke, W.; Schirmer, J. Many-Body Theory of Core Holes. _Phys. Rev. A_ **1980**, _22_ (1), 206–222. [doi.org/10.1103/PhysRevA.22.206](https://doi.org/10.1103/PhysRevA.22.206).
 
