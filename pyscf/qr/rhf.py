@@ -5,10 +5,10 @@ from scipy.linalg import block_diag
 
 from pyscf import lib, scf
 from pyscf import ao2mo
+from pyscf.tdscf.rhf import _charge_center
 
 from pyscf.qr.hf import QR
 from pyscf.qr.manifold import gxc_tensor_shape
-
 
 def _precompute_gxc(mf, G, occ_idx_n, occ_idx_m):
     '''Fill the 6-index :math:`g_\\text{xc}` buffer in place.'''
@@ -257,12 +257,59 @@ class EagerGxc:
         return numpy.einsum('iajbkc,jb,kc->ia', self.G, xpy1, xpy2, optimize=True)
 
 
-class RQR(QR):
-    '''Quadratic response for restricted RHF/RKS references.
+def transition_dipole(qrobj, tdm):
+    '''Returns transition dipole moment given excited-to-excited state 2TDM.
 
-    **Gxc:** cached in memory only when ``precompute_gxc=True``; never
-    written to checkpoint files.
+    Parameters
+    ----------
+    self : QR object
+    tdm : ndarray
+        Excited-to-excited state transition density matrix.
+
+    Returns
+    -------
+    tdip : ndarray
+        Dipole (x,y,z) components.
     '''
+    mol = qrobj.mol
+    coeff = qrobj.mo_coeff
+    with mol.with_common_orig(_charge_center(mol)):
+        ints_ao = mol.intor_symmetric('int1e_r', comp=3)
+    ints = numpy.einsum('xpq,pi,qa->xia', ints_ao, coeff, coeff)
+    return numpy.einsum('xpq,pq->x', ints, tdm14)
+
+
+def oscillator_strength(qrobj, i, j, tdm=None):
+    '''Returns oscillator strength given excited-to-excited state 2TDM.
+
+    Parameters
+    ----------
+    self : QR object
+    i : int
+        i-th state of manifold_n
+    j : int
+        j-th state of manifold_m
+    tdm : ndarray (optional)
+        Excited-to-excited state transition density matrix. If not provided,
+        it will be computed.
+
+    Returns
+    -------
+    osc : float
+        Oscillator strength
+    '''
+    if tdm is None:
+        tdm = qrobj.get_2tdm(i, j)
+    tdip = qrobj.transition_dipole(tdm)
+    ei, _ = qrobj._manifold_n(i)
+    ej, _ = qrobj._manifold_m(j)
+    return float(2./3. * (ej - ei) * numpy.dot(tdip, tdip))
+
+class RQR(QR):
+    '''Quadratic response for restricted RHF/RKS references.'''
+
+    transition_dipole = transition_dipole
+    oscillator_strength = oscillator_strength
 
     def _init_gxc(self):
         nvirt = int(numpy.count_nonzero(self.mo_occ == 0))
