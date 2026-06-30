@@ -15,7 +15,6 @@ def qr_class_for_mf(mf):
     from pyscf.qr.rhf import RQR
     from pyscf.qr.uhf import UQR
 
-    # TODO: Better determination of reference type
     if isinstance(mf, scf.ghf.GHF):
         return GQR
     if isinstance(mf, scf.uhf.UHF):

@@ -166,10 +166,6 @@ class LazyGxc:
 
         ``xpy1`` represents the sum of ``x1`` and ``y1``: the first excitation.
         '''
-        if (xpy1.shape[0] < nocc) or (xpy2.shape[0] < nocc):
-            raise NotImplementedError('Frozen orbitals not yet implemented for '
-                                      'LazyGxc evaluation!') # TODO: this
-
         if mo_occ is None: mo_occ = mf.mo_occ
         mo_energy = mf.mo_energy
         mo_coeff = mf.mo_coeff
@@ -185,6 +181,10 @@ class LazyGxc:
         nvir = orbv.shape[1]
         nocc = orbo.shape[1]
         mo = numpy.hstack((orbo,orbv))
+
+        if (xpy1.shape[0] < nocc) or (xpy2.shape[0] < nocc):
+            raise NotImplementedError('Frozen orbitals not yet implemented for '
+                                      'LazyGxc evaluation!') # TODO: this
 
         G = numpy.zeros((nocc,nvir))
 
@@ -289,7 +289,8 @@ def transition_dipole(qrobj, tdm):
     with mol.with_common_orig(_charge_center(mol)):
         ints_ao = mol.intor_symmetric('int1e_r', comp=3)
     ints = numpy.einsum('xpq,pi,qa->xia', ints_ao, coeff, coeff)
-    return numpy.einsum('xpq,pq->x', ints, tdm14)
+    # Factor of 2 for the beta-spin contribution (closed-shell reference).
+    return numpy.einsum('xpq,pq->x', ints, tdm) * 2
 
 
 def oscillator_strength(qrobj, i, j, tdm=None):
