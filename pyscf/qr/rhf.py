@@ -36,14 +36,16 @@ def _get_pq(C, Knm, V, x1, x2, y1, y2):
 
     Ha = numpy.einsum('iaqp,ia->pq', C, x1)
     Hb = numpy.einsum('iapq,ia->pq', C, x2)
+    if y1 is not None:
+        Ha += numpy.einsum('iapq,ia->pq', C, y1)
+        Hb += numpy.einsum('iaqp,ia->pq', C, y2)
+
     Pia += x2@Ha[vv].T - Ha[oo].T@x2
     Qia += x1@Hb[vv] - Hb[oo]@x1
 
     if y1 is None:
         return Pia, Qia
 
-    Ha += numpy.einsum('iapq,ia->pq', C, y1)
-    Hb += numpy.einsum('iaqp,ia->pq', C, y2)
     Pia += y1@Hb[vv].T - Hb[oo].T@y1
     Qia += y2@Ha[vv] - Ha[oo]@y2
     return Pia, Qia

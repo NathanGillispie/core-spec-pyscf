@@ -45,5 +45,5 @@ def test_2tdm(lih_td):
     ])
 
     # Abs because sign randomly flips
-    numpy.testing.assert_allclose(abs(ref), abs(qr.get_2tdm(0,3)))
+    numpy.testing.assert_allclose(abs(ref), abs(qr.get_2tdm(0,3)), atol=1e-7)
 

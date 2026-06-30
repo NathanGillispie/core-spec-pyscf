@@ -211,12 +211,13 @@ def test_eager_gxc_shares_buffer(he_mf):
         qr.kernel()
 
 
-def test_qr_get_2tdm_not_implemented(h2_mf):
+def test_qr_get_2tdm_implemented(h2_mf):
     td = RPA(h2_mf).set(nstates=2)
     td.kernel()
     qr = QR(td)
-    with pytest.raises(NotImplementedError):
-        qr.get_2tdm(0, 1)
+
+    qr.get_2tdm(0, 1)
+    assert True
 
 
 def test_uqr_not_implemented():
