@@ -3,15 +3,50 @@
 import numpy
 from scipy.linalg import block_diag
 
-from pyscf import lib
+from pyscf import lib, scf
+from pyscf import ao2mo
 
 from pyscf.qr.hf import QR
-from pyscf.qr.manifold import align_xy, gxc_tensor_shape, union_occ_idx
+from pyscf.qr.manifold import gxc_tensor_shape
 
 
-def _precompute_gxc(mf, G, mo_occ):
+def _precompute_gxc(mf, G, occ_idx_n, occ_idx_m):
     '''Fill the 6-index :math:`g_\\text{xc}` buffer in place.'''
     raise NotImplementedError('Gxc precomputation is not implemented yet.')
+
+
+def _get_2tdm_diag_block(x1, x2, y1, y2):
+    '''Return 2TDM where off-diagonal blocks are 0.'''
+    goo = -x1@x2.T
+    gvv = x2.T@x1
+    if y1 is not None:
+        goo -= y2@y1.T
+        gvv += y1.T@y2
+    return block_diag(goo, gvv)
+
+
+def _get_pq(C, Knm, V, x1, x2, y1, y2):
+    '''Create |P,Q>: RHS of casida-like eq. for QR'''
+    nocc, nvirt = C.shape[:2]
+    oo = (slice(nocc),slice(nocc))
+    vv = (slice(nocc,None),slice(nocc,None))
+
+    Pia = numpy.einsum('iapq,pq->ia', C, Knm) + V
+    Qia = numpy.einsum('iapq,pq->ia', C, Knm.T) + V
+
+    Ha = numpy.einsum('iaqp,ia->pq', C, x1)
+    Hb = numpy.einsum('iapq,ia->pq', C, x2)
+    Pia += x2@Ha[vv].T - Ha[oo].T@x2
+    Qia += x1@Hb[vv] - Hb[oo]@x1
+
+    if y1 is None:
+        return Pia, Qia
+
+    Ha += numpy.einsum('iapq,ia->pq', C, y1)
+    Hb += numpy.einsum('iaqp,ia->pq', C, y2)
+    Pia += y1@Hb[vv].T - Hb[oo].T@y1
+    Qia += y2@Ha[vv] - Ha[oo]@y2
+    return Pia, Qia
 
 
 def _compute_c(mf):
@@ -127,7 +162,82 @@ class LazyGxc:
 
         xpy represents the sum of X and Y.
         '''
-        raise NotImplementedError('Ad hoc Gxc contraction is not implemented yet.')
+        if mo_occ is None: mo_occ = mf.mo_occ
+        mo_energy = mf.mo_energy
+        mo_coeff = mf.mo_coeff
+
+        assert mo_coeff.dtype == numpy.float64
+
+        mol = mf.mol
+        nao, nmo = mo_coeff.shape
+        occidx = numpy.where(mo_occ==2)[0]
+        viridx = numpy.where(mo_occ==0)[0]
+        orbv = mo_coeff[:,viridx]
+        orbo = mo_coeff[:,occidx]
+        nvir = orbv.shape[1]
+        nocc = orbo.shape[1]
+        mo = numpy.hstack((orbo,orbv))
+
+        G = numpy.zeros((nocc,nvir))
+
+        if not isinstance(mf, scf.hf.KohnShamDFT):
+            return G
+
+        # fxc contribution
+        ni = mf._numint
+        ni.libxc.test_deriv_order(mf.xc, 3, raise_error=True)
+        xctype = ni._xc_type(mf.xc)
+
+        dm0 = mf.make_rdm1(mo_coeff, mo_occ)
+        make_rho = ni._gen_rho_evaluator(mol, dm0, hermi=1, with_lapl=False)[0]
+        mem_now = lib.current_memory()[0]
+        max_memory = max(2000, mf.max_memory*.8-mem_now)
+
+        if xctype=='GGA':
+            ao_deriv = 1
+            for ao, mask, weight, coords in ni.block_loop(mol, mf.grids, nao, ao_deriv, max_memory):
+                rho = make_rho(0, ao, mask, xctype)
+
+                gxc = ni.eval_xc_eff(mf.xc, rho, deriv=3, xctype=xctype)[3]
+
+                rho_o = numpy.einsum('xrp,pi->xri', ao, orbo)
+                rho_v = numpy.einsum('xrp,pi->xri', ao, orbv)
+                rho_ov = numpy.einsum('xrp,rq->xrpq', rho_o, rho_v[0])
+                rho_ov[1:4] += numpy.einsum('rp,xrq->xrpq', rho_o[0], rho_v[1:4])
+                rho_ov = numpy.transpose(rho_ov, (1,2,3,0))
+
+                xp1 = numpy.einsum('riax,ia->rx',rho_ov,xpy1)
+                xp2 = numpy.einsum('riax,ia->rx',rho_ov,xpy2)
+
+                wgxc = gxc * weight
+                w_ov = numpy.einsum('riax,xyzr->yziar', rho_ov, wgxc, optimize=True)
+                iajb = numpy.einsum('rx,xyiar->yiar', xp1, w_ov, optimize=True)
+                iajbkc = numpy.einsum('xiar,rx->ia', iajb, xp2, optimize=True) * 4
+                G += iajbkc
+        elif xctype=='LDA':
+            ao_deriv = 0
+            for ao, mask, weight, coords in ni.block_loop(mol, mf.grids, nao, ao_deriv, max_memory):
+                lib.logger.warn(mf, 'Running untested code!! LDA Gxc Lazy evaluation.')
+
+                rho = make_rho(0, ao, mask, xctype)
+                gxc = ni.eval_xc_eff(mf.xc, rho, deriv=3, xctype=xctype)[3]
+
+                rho = numpy.einsum('rp,pi->ri', ao, mo)
+                rho_xx = numpy.einsum('rp,rq->rpq', rho, rho)
+                rho_ov = rho_xx[:,:nocc,nocc:]
+
+                xp1 = numpy.einsum('ria,ia->r', rho_ov, xpy1)
+                xp2 = numpy.einsum('ria,ia->r', rho_ov, xpy2)
+
+                wgxc = gxc[0,0,0] * weight
+                w_ov = numpy.einsum('ria,r->iar', rho_ov, wgxc, optimize=True)
+                iajb = numpy.einsum('r,iar->iar', xp1, w_ov, optimize=True)
+                iajbkc = numpy.einsum('iar,r->ia', iajb, xp2, optimize=True) * 4
+                G += iajbkc
+        else:
+            raise NotImplementedError(f'xctype = {xctype}')
+
+        return G
 
 
 class EagerGxc:
@@ -169,7 +279,9 @@ class RQR(QR):
                  len(self._manifold_n.e), len(self._manifold_m.e))
         if self.precompute_gxc:
             log.info('QR kernel: precomputing Gxc (%s)', self._gxc.shape)
-            _precompute_gxc(self._scf, self._gxc, self._manifold_n.occ_idx, self._manifold_m.occ_idx)
+            _precompute_gxc(
+                self._scf, self._gxc,
+                self._manifold_n.occ_idx, self._manifold_m.occ_idx)
         return self
 
     def get_2tdm(self, i, j):
@@ -196,41 +308,39 @@ class RQR(QR):
 
         # TODO: cache these! The next two LOC are pure functions.
         C = _compute_c(self._scf)
+        nocc, nvirt = C.shape[:2]
         A, B = _get_ab_from_c(C, self.mo_energy)
-
-        # e_i = float(self._manifold_n.e[i])
-        # e_j = float(self._manifold_m.e[j])
+        Lambda = numpy.block([[A,B],[B,A]])
+        Delta = numpy.eye(2*nocc*nvirt)
+        Delta[nocc*nvirt:] *= -1
 
         x1_g, y1_g = self._manifold_n.xy[i]
         x2_g, y2_g = self._manifold_m.xy[j]
 
-        V = self._gxc_backend.contract_v(self._scf, x1_g, x2_g)
+        if self.response_type == 'tda':
+            V = self._gxc_backend.contract_v(self._scf, x1_g, x2_g)
+        else:
+            V = self._gxc_backend.contract_v(self._scf, x1_g + y1_g, x2_g + y2_g)
 
-        # TODO: get aligned X and Y from _manifold attribute
-        # x1, y1 = align_xy(self._manifold_n, i)
-        # x2, y2 = align_xy(self._manifold_m, j)
+        # Making explicit these quantities WILL NOT BE USED later.
+        # Instead, we will get XY aligned to MO orbital indexing
+        del x1_g, y1_g, x2_g, y2_g
 
-        # TODO: func to get diagonal blocks of 2TDM.
-        # goo = -(x1@x4.T + y4@y1.T)
-        # gvv = (y1.T@y4 + x4.T@x1)
-        # Knm = block_diag(goo, gvv)
+        e1, (x1, y1) = self._manifold_n(i)
+        e2, (x2, y2) = self._manifold_m(j)
 
-        # TODO: call function to compute PQ (RHS of casida eq.) 
-        # Pia = np.einsum('iapq,pq->ia', C, Knm) + V
-        # Qia = np.einsum('iapq,pq->ia', C, Knm.T) + V
-        # Ha = np.einsum('iapq,ia->pq', C, y1) + np.einsum('iaqp,ia->pq', C, x1)
-        # Hb = np.einsum('iapq,ia->pq', C, x4) + np.einsum('iaqp,ia->pq', C, y4)
-        # oo = (slice(nocc),slice(nocc))
-        # vv = (slice(nocc,None),slice(nocc,None))
-        # Pia += x4@Ha[vv].T - Ha[oo].T@x4 + y1@Hb[vv].T - Hb[oo].T@y1
-        # Qia += y4@Ha[vv] - Ha[oo]@y4 + x1@Hb[vv] - Hb[oo]@x1
-        # pqm = np.reshape((Pia,Qia),-1)
+        tdm = _get_2tdm_diag_block(x1, x2, y1, y2)
+
+        Pia, Qia = _get_pq(C, tdm, V, x1, x2, y1, y2)
+        pqm = numpy.reshape((Pia, Qia), -1)
 
         # Solve Casida's equation with ω = ΩM - ΩN
-        # xym = np.linalg.solve(Λ - (e4-e1)*Δ, -pqm)
-        # _x2, _y2 = np.reshape(xym, (2,nocc,nvirt))
+        xym = numpy.linalg.solve(Lambda - (e2-e1)*Delta, -pqm)
+        _x2, _y2 = numpy.reshape(xym, (2,nocc,nvirt))
 
-        if self.response_type == 'tda':
-            pass
-        else:
-            pass
+        # Fill in off-diagonal blocks of 2TDM
+        tdm[:nocc,nocc:] = _y2
+        tdm[nocc:,:nocc] = _x2.T
+
+        return tdm
+

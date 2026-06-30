@@ -31,11 +31,8 @@ reference implementations.
 '''
 
 from pyscf.qr.hf import QR, qr_class_for_mf
-from pyscf.qr.manifold import Manifold, align_xy, gxc_tensor_shape, union_occ_idx
-from pyscf.qr.rhf import (
-    RQR, compute_2tdm_rpa, compute_2tdm_tda,
-    LazyGxc, EagerGxc,
-)
+from pyscf.qr.manifold import Manifold, gxc_tensor_shape
+from pyscf.qr.rhf import RQR, LazyGxc, EagerGxc
 from pyscf.qr.uhf import UQR
 from pyscf.qr.ghf import GQR
 
@@ -51,8 +48,4 @@ __all__ = [
     'LazyGxc',
     'EagerGxc',
     'gxc_tensor_shape',
-    'align_xy',
-    'union_occ_idx',
-    'compute_2tdm_rpa',
-    'compute_2tdm_tda',
 ]

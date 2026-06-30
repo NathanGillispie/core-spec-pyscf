@@ -105,6 +105,8 @@ class Manifold:
         Molecular object.
     mo_coeff : ndarray
         MO coefficients in the AO basis.
+    mo_occ : ndarray
+        Mean-field occupation numbers in the MO basis (shared with ``mf``).
     occ_idx : ndarray
         1D int array of active occupied MO indices in the full MO basis.
     e : ndarray
@@ -117,6 +119,7 @@ class Manifold:
 
     mol: object
     mo_coeff: numpy.ndarray
+    mo_occ: numpy.ndarray
     occ_idx: numpy.ndarray
     e: numpy.ndarray
     xy: tuple
@@ -124,6 +127,7 @@ class Manifold:
 
     def __post_init__(self):
         object.__setattr__(self, 'mo_coeff', numpy.asarray(self.mo_coeff))
+        object.__setattr__(self, 'mo_occ', numpy.asarray(self.mo_occ))
         object.__setattr__(self, 'occ_idx', numpy.asarray(self.occ_idx, dtype=int))
         object.__setattr__(self, 'e', numpy.asarray(self.e))
 
@@ -171,32 +175,70 @@ class Manifold:
         return cls(
             mol=mf.mol,
             mo_coeff=mf.mo_coeff,
+            mo_occ=numpy.asarray(mf.mo_occ),
             occ_idx=occ_idx,
             e=numpy.asarray(tdobj.e),
             xy=_normalize_xy(tdobj.xy),
             nstates=nstates,
         )
 
-    def get_xy_state(self, state):
-        '''Return amplitudes for one excited state as ``(x, y)``.
+    # TODO: VERIFY VERIFY VERIFY this function
+    def get_aligned_xy(self, state):
+        '''Pad compact TD amplitudes onto the full MO (occ, virt) basis.
 
-        For TDA, ``y`` is ``None``.
+        Rows index all occupied MOs (``mo_occ > 0``); columns index all virtual
+        MOs (``mo_occ == 0``).  Compact amplitudes are placed at rows
+        ``occ_idx``; columns follow the standard PySCF ordering of virtual MOs.
 
         Parameters
         ----------
         state : int
-            0-based index into ``e`` and ``xy``.
+            0-based excited-state index.
+
+        Returns
+        -------
+        x, y : ndarray
+            Padded amplitudes with shape ``(nocc, nvirt)`` for the full MO
+            basis.  Rows and columns outside the active LR subspace are zero.
+            ``y`` is None for TDA.
         '''
         if state < 0 or state >= len(self.e):
             raise IndexError(f'state={state} out of range for {len(self.e)} states')
-        return self.xy[state]
+        x, y = self.xy[state]
+        mo_occ = self.mo_occ
+        occ_full = numpy.where(mo_occ > 0)[0]
+        nvirt_full = int(numpy.count_nonzero(mo_occ == 0))
+        x_pad = numpy.zeros((len(occ_full), nvirt_full), dtype=x.dtype)
+        y_pad = numpy.zeros((len(occ_full), nvirt_full), dtype=x.dtype)
+        row_pos = numpy.searchsorted(occ_full, self.occ_idx)
+        ncol = x.shape[1]
+        if ncol > nvirt_full:
+            raise ValueError(
+                f'compact x has {ncol} virtual columns but mo_occ has '
+                f'only {nvirt_full} virtual orbitals')
+        x_pad[row_pos, :ncol] = x
+        if y is not None:
+            y_pad[row_pos, :ncol] = y
+        return x_pad, y_pad
 
-    def get_x_y(self, state):
-        '''Return ``(x, y)`` ndarrays; TDA uses ``y = zeros_like(x)``.'''
-        x, y = self.get_xy_state(state)
-        if y is None:
-            y = numpy.zeros_like(x)
-        return x, y
+    def __call__(self, state):
+        '''Return excitation energy and aligned amplitudes for one state.
+
+        Parameters
+        ----------
+        state : int
+            0-based excited-state index.
+
+        Returns
+        -------
+        e : float
+            Excitation energy in Hartree.
+        xy : tuple of ndarray
+            ``(x, y)`` padded onto the full MO basis (see :meth:`get_aligned_xy`).
+        '''
+        if state < 0 or state >= len(self.e):
+            raise IndexError(f'state={state} out of range for {len(self.e)} states')
+        return float(self.e[state]), self.get_aligned_xy(state)
 
     def dump(self):
         '''Serialize linear-response data to a JSON string.
@@ -232,6 +274,7 @@ class Manifold:
         return cls(
             mol=mf.mol,
             mo_coeff=mf.mo_coeff,
+            mo_occ=numpy.asarray(mf.mo_occ),
             occ_idx=payload['occ_idx'],
             e=payload['e'],
             xy=_decode_xy(payload['xy']),
@@ -251,60 +294,12 @@ def gxc_tensor_shape(manifold_n, manifold_m, nvirt):
     tuple of int
         ``(nocc, nvirt, nocc_n, nvirt_n, nocc_m, nvirt_m)``
     '''
-    nocc = len(union_occ_idx(manifold_n, manifold_m))
+    nocc = int(numpy.count_nonzero(manifold_n.mo_occ > 0))
     nocc_n = len(manifold_n.occ_idx)
     nocc_m = len(manifold_m.occ_idx)
     nvirt_n = manifold_n.xy[0][0].shape[1]
     nvirt_m = manifold_m.xy[0][0].shape[1]
     return (nocc, nvirt, nocc_n, nvirt_n, nocc_m, nvirt_m)
-
-
-def union_occ_idx(*manifolds):
-    '''Union of active occupied indices across one or more manifolds.
-
-    Used when aligning amplitudes from different manifolds onto a common
-    active-occ basis for Gxc contraction or 2TDM evaluation.
-    '''
-    if not manifolds:
-        raise ValueError('At least one manifold is required')
-    out = manifolds[0].occ_idx
-    for man in manifolds[1:]:
-        out = numpy.union1d(out, man.occ_idx)
-    return out
-
-
-def align_xy(manifold, state, union_occ):
-    '''Pad one state's amplitudes onto a union active-occ basis.
-
-    Storage in :class:`Manifold` remains compact; padding is applied only
-    when cross-manifold QR quantities require a shared ``(nocc_union, nvirt)``
-    indexing.
-
-    Parameters
-    ----------
-    manifold : Manifold
-    state : int
-        0-based excited-state index.
-    union_occ : ndarray
-        Sorted union of ``occ_idx`` values from all manifolds involved.
-
-    Returns
-    -------
-    x, y : ndarray
-        Padded amplitudes with shape ``(len(union_occ), nvirt)``.  Rows of
-        ``union_occ`` not in ``manifold.occ_idx`` are zero.
-    '''
-    x, y = manifold.get_x_y(state)
-    nvirt = x.shape[1]
-    union_occ = numpy.asarray(union_occ, dtype=int)
-    x_pad = numpy.zeros((len(union_occ), nvirt), dtype=x.dtype)
-    pos = numpy.searchsorted(union_occ, manifold.occ_idx)
-    x_pad[pos, :] = x
-    y_pad = numpy.zeros((len(union_occ), nvirt), dtype=y.dtype)
-    _, y_raw = manifold.get_xy_state(state)
-    if y_raw is not None:
-        y_pad[pos, :] = y_raw
-    return x_pad, y_pad
 
 
 def check_shared_reference(tdobj_n, tdobj_m):

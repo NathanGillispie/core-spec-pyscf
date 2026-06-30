@@ -9,7 +9,7 @@ from pyscf.tdscf import RPA, TDA
 
 import pyscf.qr
 from pyscf.qr import Manifold, QR
-from pyscf.qr.manifold import align_xy, gxc_tensor_shape, union_occ_idx
+from pyscf.qr.manifold import gxc_tensor_shape
 from pyscf.qr.rhf import EagerGxc
 from pyscf.qr.uhf import UQR
 from pyscf.qr.ghf import GQR
@@ -64,6 +64,7 @@ def test_manifold_dump_roundtrip(he_mf):
     manifold = Manifold(
         mol=he_mf.mol,
         mo_coeff=he_mf.mo_coeff,
+        mo_occ=he_mf.mo_occ,
         occ_idx=occ_idx,
         e=e,
         xy=xy,
@@ -184,20 +185,20 @@ def test_gxc_tensor_shape_two_manifolds(he_mf):
     occ_a = numpy.array([0], dtype=int)
     occ_b = numpy.array([0, 1], dtype=int)
     man_a = Manifold(
-        mol=he_mf.mol, mo_coeff=he_mf.mo_coeff,
+        mol=he_mf.mol, mo_coeff=he_mf.mo_coeff, mo_occ=he_mf.mo_occ,
         occ_idx=occ_a,
         e=numpy.array([0.1]),
         xy=((numpy.zeros((1, 1)), numpy.zeros((1, 1))),),
     )
     man_b = Manifold(
-        mol=he_mf.mol, mo_coeff=he_mf.mo_coeff,
+        mol=he_mf.mol, mo_coeff=he_mf.mo_coeff, mo_occ=he_mf.mo_occ,
         occ_idx=occ_b,
         e=numpy.array([0.2]),
         xy=((numpy.zeros((2, 1)), numpy.zeros((2, 1))),),
     )
     nvirt = int(numpy.count_nonzero(he_mf.mo_occ == 0))
     shape = gxc_tensor_shape(man_a, man_b, nvirt)
-    assert shape == (2, nvirt, 1, 1, 2, 1)
+    assert shape == (1, nvirt, 1, 1, 2, 1)
 
 
 def test_eager_gxc_shares_buffer(he_mf):
@@ -262,22 +263,33 @@ def test_from_chk_requires_mf(h2_mf, tmp_path):
         QR.from_chk(chk)
 
 
-def test_align_xy_padding(he_mf):
-    occ_a = numpy.array([0], dtype=int)
-    occ_b = numpy.array([0, 1], dtype=int)
-    man_a = Manifold(
-        mol=he_mf.mol, mo_coeff=he_mf.mo_coeff,
-        occ_idx=occ_a,
-        e=numpy.array([0.1]), xy=((numpy.ones((1, 1)), None),),
+def test_get_aligned_xy_padding(he_mf):
+    mo_occ = numpy.array([2, 2, 0, 0, 0, 0])
+    occ_idx = numpy.array([0], dtype=int)
+    nvirt = int(numpy.count_nonzero(mo_occ == 0))
+    man = Manifold(
+        mol=he_mf.mol, mo_coeff=he_mf.mo_coeff, mo_occ=mo_occ,
+        occ_idx=occ_idx,
+        e=numpy.array([0.1]), xy=((numpy.ones((1, nvirt)), None),),
     )
-    man_b = Manifold(
-        mol=he_mf.mol, mo_coeff=he_mf.mo_coeff,
-        occ_idx=occ_b,
-        e=numpy.array([0.2]), xy=((numpy.ones((2, 1)), None),),
-    )
-    union = union_occ_idx(man_a, man_b)
-    x_pad, y_pad = align_xy(man_a, 0, union)
-    assert x_pad.shape == (len(union), 1)
-    assert y_pad.shape == (len(union), 1)
+    x_pad, y_pad = man.get_aligned_xy(0)
+    assert x_pad.shape == (2, nvirt)
+    assert y_pad.shape == (2, nvirt)
     assert x_pad[0, 0] == 1.0
     assert x_pad[1, 0] == 0.0
+
+
+def test_manifold_call(he_mf):
+    mo_occ = numpy.array([2, 2, 0, 0, 0, 0])
+    occ_idx = numpy.array([0], dtype=int)
+    nvirt = int(numpy.count_nonzero(mo_occ == 0))
+    e = numpy.array([0.42])
+    man = Manifold(
+        mol=he_mf.mol, mo_coeff=he_mf.mo_coeff, mo_occ=mo_occ,
+        occ_idx=occ_idx,
+        e=e, xy=((numpy.ones((1, nvirt)), None),),
+    )
+    e_out, (x, y) = man(0)
+    assert e_out == 0.42
+    assert x.shape == (2, nvirt)
+    assert y.shape == (2, nvirt)

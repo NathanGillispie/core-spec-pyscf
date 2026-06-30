@@ -7,7 +7,6 @@ from pyscf.qr import chkfile as qr_chkfile
 from pyscf.qr.manifold import (
     Manifold,
     check_shared_reference,
-    union_occ_idx,
 )
 
 
