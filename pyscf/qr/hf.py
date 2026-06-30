@@ -1,7 +1,6 @@
 '''Base quadratic response driver.'''
 
 from pyscf import lib, scf
-from pyscf.lib import logger
 
 from pyscf.qr import chkfile as qr_chkfile
 from pyscf.qr.manifold import (
@@ -36,7 +35,7 @@ class QR(lib.StreamObject):
     Parameters
     ----------
     tdobj_n : TDSCF
-        Primary linear-response object (e.g. intermediate / core excitations).
+        Primary linear-response object.
     tdobj_m : TDSCF, optional
         Secondary linear-response object.  Defaults to ``tdobj_n``.
     chkfile : str, optional
@@ -53,6 +52,9 @@ class QR(lib.StreamObject):
 
     Reference-specific subclasses (e.g. :class:`RQR`) implement ``g_xc``
     contraction and 2TDM evaluation.
+
+    When calculating excited-to-excited state properties, excitations go from
+    manifold N to M.
     '''
 
     _keys = {
@@ -116,7 +118,9 @@ class QR(lib.StreamObject):
 
     @classmethod
     def from_chk(cls, chkfile, mf, *, precompute_gxc=False):
-        '''Restore a :class:`QR` instance from an LR checkpoint file.
+        '''Restore a :class:`QR` instance from a checkpoint file.
+
+        This can only be used following :meth:``save``.
 
         Parameters
         ----------
@@ -131,11 +135,33 @@ class QR(lib.StreamObject):
 
         Returns
         -------
-        QR
+        QR subclass object.
         '''
         driver_cls = qr_class_for_mf(mf)
         return driver_cls._from_restored(
             chkfile, mf, precompute_gxc=precompute_gxc)
+
+    def save(self, chkfile=None):
+        '''Write checkpoint to disk.
+
+        Call after initialization (linear response complete) and before
+        :meth:`kernel`.  Stores manifold LR results only; pass ``mf`` to
+        :meth:`from_chk` to restore reference data.  ``Gxc`` is not saved.
+
+        The intended purpose is to pause and inspect LR results before moving on
+        to QR. This may be necessary to set energy bounds on plots, etc.
+
+        Parameters
+        ----------
+        chkfile : str, optional
+            Destination path.  Defaults to ``self.chkfile``.
+
+        Returns
+        -------
+        self
+        '''
+        qr_chkfile.save_qr(self, chkfile=chkfile)
+        return self
 
     def _set_response_type(self):
         self.response_type = self._infer_response_type(self._manifold_n)
@@ -192,26 +218,6 @@ class QR(lib.StreamObject):
 
         e_i = float(self._manifold_n.e[i])
         e_j = float(self._manifold_m.e[j])
-        logger.new_logger(self).info(
+        lib.logger.new_logger(self).info(
             'QR 2TDM: manifold_n[%d] -> manifold_m[%d], omega=%.6f Ha',
             i, j, e_j - e_i)
-
-
-    def save(self, chkfile=None):
-        '''Write LR checkpoint to disk.
-
-        Call after initialization (linear response complete) and before
-        :meth:`kernel`.  Stores manifold LR results only; pass ``mf`` to
-        :meth:`from_chk` to restore reference data.  ``Gxc`` is not saved.
-
-        Parameters
-        ----------
-        chkfile : str, optional
-            Destination path.  Defaults to ``self.chkfile``.
-
-        Returns
-        -------
-        self
-        '''
-        qr_chkfile.save_qr(self, chkfile=chkfile)
-        return self

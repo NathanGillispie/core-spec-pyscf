@@ -52,9 +52,13 @@ def _get_pq(C, Knm, V, x1, x2, y1, y2):
 
 
 def _compute_c(mf):
-    '''Returns C matrix of shape (nocc, nvirt, nmo, nmo)
+    '''Returns a matrix of shape (nocc, nvirt, nmo, nmo).
 
-    TODO: eventually cache this as well just like Gxc.
+    This is a generalization of the B matrix in linear response.
+
+    The (o,v,o,v) and (o,v,v,o) blocks are used to compute A & B like in linear
+    response. The (o,v,o,o) and (o,v,v,v) blocks are used for QR, but I
+    don't separate them for simplicity. Nothing goes to waste here.
     '''
     mo_coeff = mf.mo_coeff
     mo_occ = mf.mo_occ
@@ -81,7 +85,6 @@ def _compute_c(mf):
         add_hf_(C)
         return C
 
-    # fxc contribution
     ni = mf._numint
     ni.libxc.test_deriv_order(mf.xc, 3, raise_error=True)
     omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
@@ -138,6 +141,7 @@ def _compute_c(mf):
 
 
 def _get_ab_from_c(C, mo_energy):
+    '''Returns the regular A,B matrices given C from :meth:``_compute_c``'''
     nocc, nvirt = C.shape[:2]
     e_ia = mo_energy[nocc:] - mo_energy[:nocc,None]
     A = numpy.diag(e_ia.ravel()).reshape(nocc,nvirt,nocc,nvirt)
@@ -148,22 +152,24 @@ def _get_ab_from_c(C, mo_energy):
 
 
 class LazyGxc:
-    '''Compute ``g_xc`` new each time for each state pair.
+    '''Compute :math:``g_\\text{xc}`` new each time for each state pair.
 
     Avoids storing the 6-index tensor but repeats grid work per call.
-    This is generally faster if you only need a few calculations.
 
     Notes
     -----
-    TDA contracts against raw ``x`` vectors (see reference ``get_v``), not
-    ``x + y``.  Pass ``y=0`` via :meth:`contract_v` callers for TDA.
+    Generally faster than :class:``EagerGxc`` when you only need a few calls.
     '''
 
     def contract_v(self, mf, xpy1, xpy2, mo_occ=None):
-        '''Return the ``V_ia`` vector for one pair of transition densities.
+        '''Return the ``V_ia`` vector given two excitated states.
 
-        xpy represents the sum of X and Y.
+        ``xpy1`` represents the sum of ``x1`` and ``y1``: the first excitation.
         '''
+        if (xpy1.shape[0] < nocc) or (xpy2.shape[0] < nocc):
+            raise NotImplementedError('Frozen orbitals not yet implemented for '
+                                      'LazyGxc evaluation!') # TODO: this
+
         if mo_occ is None: mo_occ = mf.mo_occ
         mo_energy = mf.mo_energy
         mo_coeff = mf.mo_coeff
@@ -185,7 +191,6 @@ class LazyGxc:
         if not isinstance(mf, scf.hf.KohnShamDFT):
             return G
 
-        # fxc contribution
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 3, raise_error=True)
         xctype = ni._xc_type(mf.xc)
@@ -199,18 +204,20 @@ class LazyGxc:
             ao_deriv = 1
             for ao, mask, weight, coords in ni.block_loop(mol, mf.grids, nao, ao_deriv, max_memory):
                 rho = make_rho(0, ao, mask, xctype)
-
                 gxc = ni.eval_xc_eff(mf.xc, rho, deriv=3, xctype=xctype)[3]
 
                 rho_o = numpy.einsum('xrp,pi->xri', ao, orbo)
                 rho_v = numpy.einsum('xrp,pi->xri', ao, orbv)
                 rho_ov = numpy.einsum('xrp,rq->xrpq', rho_o, rho_v[0])
                 rho_ov[1:4] += numpy.einsum('rp,xrq->xrpq', rho_o[0], rho_v[1:4])
+                # This makes later contractions much faster
                 rho_ov = numpy.transpose(rho_ov, (1,2,3,0))
 
+                # Convert excitation in MO basis to grid domain.
                 xp1 = numpy.einsum('riax,ia->rx',rho_ov,xpy1)
                 xp2 = numpy.einsum('riax,ia->rx',rho_ov,xpy2)
 
+                # '...r,r...->...' looks like matrix multiplication. This is fast!
                 wgxc = gxc * weight
                 w_ov = numpy.einsum('riax,xyzr->yziar', rho_ov, wgxc, optimize=True)
                 iajb = numpy.einsum('rx,xyiar->yiar', xp1, w_ov, optimize=True)
@@ -219,7 +226,8 @@ class LazyGxc:
         elif xctype=='LDA':
             ao_deriv = 0
             for ao, mask, weight, coords in ni.block_loop(mol, mf.grids, nao, ao_deriv, max_memory):
-                lib.logger.warn(mf, 'Running untested code!! LDA Gxc Lazy evaluation.')
+                lib.logger.warn(mf, 'LazyGxc contraction for LDA functionals: '
+                                    'running untested code!') # TODO: test this
 
                 rho = make_rho(0, ao, mask, xctype)
                 gxc = ni.eval_xc_eff(mf.xc, rho, deriv=3, xctype=xctype)[3]
@@ -248,6 +256,11 @@ class EagerGxc:
     ``G`` has shape ``(nocc, nvirt, nocc_n, nvirt_n, nocc_m, nvirt_m)`` and is
     filled in place by :meth:`RQR.kernel` when ``precompute_gxc=True``.  The
     tensor is never written to checkpoint files.
+
+    The last two pairs of indices will differ when any of the two excited states
+    used frozen orbitals for the linear response calculation. That assumption
+    allows a lot of space/computation to be saved. It also means that no padding
+    or reshaping is required from excitation vectors before :meth:``contract_v``.
     '''
 
     def __init__(self, G):
@@ -336,24 +349,24 @@ class RQR(QR):
     def get_2tdm(self, i, j):
         '''Excited-to-excited state transition density matrix (2TDM).
 
+        Works for both TDA and RPA manifolds.
+
         Parameters
         ----------
         i : int
-            0-based index into ``manifold_n.e`` / ``manifold_n.xy``.
+            0-based index into ``manifold_n``.
         j : int
-            0-based index into ``manifold_m.e`` / ``manifold_m.xy``.
+            0-based index into ``manifold_m``.
 
         Returns
         -------
         tdm : ndarray
             Shape ``(nmo, nmo)``.
-
-        Raises
-        ------
-        IndexError
-            When ``i`` or ``j`` is out of range.
         '''
         self._sanity_check_2tdm(i, j)
+
+        log = lib.logger.new_logger(self)
+        log.info('  Computing C.')
 
         # TODO: cache these! The next two LOC are pure functions.
         C = _compute_c(self._scf)
@@ -363,6 +376,7 @@ class RQR(QR):
         Delta = numpy.eye(2*nocc*nvirt)
         Delta[nocc*nvirt:] *= -1
 
+        log.info('  LHS of Casida eq. fully determined. Computing Gxc term.')
         x1_g, y1_g = self._manifold_n.xy[i]
         x2_g, y2_g = self._manifold_m.xy[j]
 
@@ -371,6 +385,7 @@ class RQR(QR):
         else:
             V = self._gxc_backend.contract_v(self._scf, x1_g + y1_g, x2_g + y2_g)
 
+        log.info('  Gxc done. Determining RHS of Casida eq.')
         # Making explicit these quantities WILL NOT BE USED later.
         # Instead, we will get XY aligned to MO orbital indexing
         del x1_g, y1_g, x2_g, y2_g
@@ -383,11 +398,12 @@ class RQR(QR):
         Pia, Qia = _get_pq(C, tdm, V, x1, x2, y1, y2)
         pqm = numpy.reshape((Pia, Qia), -1)
 
-        # Solve Casida's equation with ω = ΩM - ΩN
+        log.info('  Solving Casida eq. with ω = ΩM - ΩN.')
         xym = numpy.linalg.solve(Lambda - (e2-e1)*Delta, -pqm)
         _x2, _y2 = numpy.reshape(xym, (2,nocc,nvirt))
 
-        # Fill in off-diagonal blocks of 2TDM
+        # Fill in off-diagonal blocks of 2TDM. Some flip the convention by
+        # transposing. I think this follows PySCFs linear response convention.
         tdm[:nocc,nocc:] = _y2
         tdm[nocc:,:nocc] = _x2.T
 

@@ -49,3 +49,6 @@ __all__ = [
     'EagerGxc',
     'gxc_tensor_shape',
 ]
+
+__author__ = "Nathan Gillispie"
+
