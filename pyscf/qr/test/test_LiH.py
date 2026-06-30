@@ -47,3 +47,95 @@ def test_2tdm(lih_td):
     # Abs because sign randomly flips
     numpy.testing.assert_allclose(abs(ref), abs(qr.get_2tdm(0,3)), atol=1e-7)
 
+
+# ---------------------------------------------------------------------------
+# Step-by-step diagnostics: compare QR intermediates against the reference.
+#
+# These walk the pipeline C -> V -> Knm -> Pia/Qia so a failure pinpoints the
+# exact step where the QR rewrite diverges from the reference math.  The "sum of
+# absolute values" invariant guards against benign sign flips / degeneracies.
+# ---------------------------------------------------------------------------
+
+_PAIRS = [(0, 3), (0, 1), (1, 3), (2, 3)]
+
+
+@pytest.mark.parametrize('pair', _PAIRS)
+def test_intermediate_C(lih_intermediates, pair):
+    '''C is independent of the state pair; it must match the reference.'''
+    data = lih_intermediates[pair]
+    ref_C = data['ref']['C']
+    qr_C = data['qr']['C']
+    numpy.testing.assert_allclose(_abssum(qr_C), _abssum(ref_C), rtol=1e-7)
+    numpy.testing.assert_allclose(qr_C, ref_C, atol=1e-9)
+
+
+@pytest.mark.parametrize('pair', _PAIRS)
+def test_intermediate_V(lih_intermediates, pair):
+    data = lih_intermediates[pair]
+    ref_V = data['ref']['V']
+    qr_V = data['qr']['V']
+    numpy.testing.assert_allclose(_abssum(qr_V), _abssum(ref_V), rtol=1e-7)
+    numpy.testing.assert_allclose(abs(qr_V), abs(ref_V), atol=1e-9)
+
+
+@pytest.mark.parametrize('pair', _PAIRS)
+def test_intermediate_Knm(lih_intermediates, pair):
+    data = lih_intermediates[pair]
+    ref_K = data['ref']['Knm']
+    qr_K = data['qr']['Knm']
+    numpy.testing.assert_allclose(_abssum(qr_K), _abssum(ref_K), rtol=1e-7)
+    numpy.testing.assert_allclose(abs(qr_K), abs(ref_K), atol=1e-9)
+
+
+@pytest.mark.parametrize('pair', _PAIRS)
+def test_intermediate_Pia(lih_intermediates, pair):
+    data = lih_intermediates[pair]
+    ref_P = data['ref']['Pia']
+    qr_P = data['qr']['Pia']
+    numpy.testing.assert_allclose(_abssum(qr_P), _abssum(ref_P), rtol=1e-7)
+
+
+@pytest.mark.parametrize('pair', _PAIRS)
+def test_intermediate_Qia(lih_intermediates, pair):
+    data = lih_intermediates[pair]
+    ref_Q = data['ref']['Qia']
+    qr_Q = data['qr']['Qia']
+    numpy.testing.assert_allclose(_abssum(qr_Q), _abssum(ref_Q), rtol=1e-7)
+
+
+# ---------------------------------------------------------------------------
+# Transition dipole moment + oscillator strength (state 0 -> state 3).
+#
+# Hard-coded targets so the suite is self-contained.  Only the (0, 3) pair is
+# used: LiH states 1 and 2 are degenerate (e = 0.18482305 Ha), so transitions
+# involving them individually are not uniquely defined run-to-run.  States 0
+# and 3 are non-degenerate, and the (0, 3) 2TDM is already validated
+# element-wise by ``test_2tdm``.  The 2TDM sign flips between runs, so we test
+# the (sign-robust) dipole magnitude.
+# ---------------------------------------------------------------------------
+
+_TDIP_MAG_03 = 0.15801795
+_OSC_03 = 1.35903052e-03
+
+
+def test_transition_dipole(lih_td):
+    qr = QR(lih_td)
+    tdm = qr.get_2tdm(0, 3)
+    mag = float(numpy.linalg.norm(qr.transition_dipole(tdm)))
+    numpy.testing.assert_allclose(mag, _TDIP_MAG_03, rtol=1e-7)
+
+
+def test_oscillator_strength(lih_td):
+    qr = QR(lih_td)
+    numpy.testing.assert_allclose(
+        qr.oscillator_strength(0, 3), _OSC_03, rtol=1e-7)
+
+
+def test_oscillator_strength_tdm_passthrough(lih_td):
+    '''Passing an explicit 2TDM must match the internally computed one.'''
+    qr = QR(lih_td)
+    tdm = qr.get_2tdm(0, 3)
+    numpy.testing.assert_allclose(
+        qr.oscillator_strength(0, 3, tdm=tdm),
+        qr.oscillator_strength(0, 3))
+
