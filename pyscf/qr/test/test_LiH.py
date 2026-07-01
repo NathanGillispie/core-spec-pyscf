@@ -135,6 +135,18 @@ def test_transition_dipole(lih_td):
     numpy.testing.assert_allclose(mag, 0.15801795, rtol=1e-7)
 
 
+@pytest.mark.parametrize('approximation, tdip_ref', [
+    ('Nascimento', 0.21415484),
+    ('Zero', 0.28107033),
+    ('Pseudo', 0.22228616),
+])
+def test_transition_dipole_approximation(lih_td, approximation, tdip_ref):
+    qr = QR(lih_td, approximation=approximation)
+    tdm = qr.get_2tdm(0, 3)
+    tdip = float(numpy.linalg.norm(qr.transition_dipole(tdm)))
+    numpy.testing.assert_allclose(tdip, tdip_ref, rtol=1e-7)
+
+
 def test_oscillator_strength(lih_td):
     qr = QR(lih_td)
     numpy.testing.assert_allclose(
