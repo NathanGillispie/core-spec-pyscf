@@ -8,6 +8,7 @@ from pyscf import ao2mo
 from pyscf.tdscf.rhf import _charge_center
 
 from pyscf.qr.hf import QR
+from pyscf.qr.intermediates import CasidaIntermediates
 from pyscf.qr.manifold import gxc_tensor_shape
 
 def _precompute_gxc(mf, G, occ_idx_n, occ_idx_m):
@@ -335,6 +336,11 @@ class RQR(QR):
         else:
             self._gxc_backend = LazyGxc()
 
+    def _build_intermediates(self):
+        C = _compute_c(self._scf)
+        A, B = _get_ab_from_c(C, self.mo_energy)
+        return CasidaIntermediates.from_ab(C, A, B)
+
     def kernel(self, *args, **kwargs):
         '''QR-stage setup: optionally precompute ``Gxc`` in memory.'''
         log = lib.logger.new_logger(self)
@@ -379,21 +385,9 @@ class RQR(QR):
         if self.approximation == 'Nascimento': # TODO: to_lower str if not None
             return tdm
 
-        # TODO: cache these! The next two LOC are pure functions.
-        if self._cached_intermediates is not None:
-            log.info('  Found cached intermediates. Not recomputing C.')
-            C, Lambda, Delta = self._cached_intermediates
-            nocc, nvirt = C.shape[:2]
-        else:
-            log.info('  Computing C.')
-            C = _compute_c(self._scf)
-            nocc, nvirt = C.shape[:2]
-            A, B = _get_ab_from_c(C, self.mo_energy)
-            Lambda = numpy.block([[A,B],[B,A]])
-            Delta = numpy.eye(2*nocc*nvirt)
-            Delta[nocc*nvirt:] *= -1
-
-            self._cached_intermediates = C, Lambda, Delta
+        inter = self.intermediates
+        C, Lambda, Delta = inter.C, inter.Lambda, inter.Delta
+        nocc, nvirt = inter.nocc, inter.nvirt
 
         log.info('  LHS of Casida eq. fully determined. Computing Gxc term.')
 

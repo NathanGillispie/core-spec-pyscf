@@ -67,6 +67,7 @@ class QR(lib.StreamObject):
     }
 
     precompute_gxc = False
+    _cached_intermediates = None
 
     def __init__(self, tdobj_n, tdobj_m=None, *, chkfile=None,
                  precompute_gxc=False, approximation=None):
@@ -84,8 +85,6 @@ class QR(lib.StreamObject):
         self.chkfile = chkfile if chkfile is not None else mf.chkfile
         self.precompute_gxc = bool(precompute_gxc)
         self.approximation = approximation
-
-        self._cached_intermediates = None
 
         self._manifold_n = Manifold.from_tdobj(tdobj_n)
         if tdobj_m is tdobj_n:
@@ -190,6 +189,17 @@ class QR(lib.StreamObject):
         '''Hook for reference-specific Gxc backend setup.'''
         raise NotImplementedError('_init_gxc called from base QR class. '
                                   'Subclass override needed.')
+
+    @property
+    def intermediates(self):
+        '''Immutable Casida LHS, built lazily on first use and cached.'''
+        if self._cached_intermediates is None:
+            self._cached_intermediates = self._build_intermediates()
+        return self._cached_intermediates
+
+    def _build_intermediates(self):
+        raise NotImplementedError('_build_intermediates called from base QR '
+                                  'class. Subclass override needed.')
 
     @property
     def manifold_n(self):
