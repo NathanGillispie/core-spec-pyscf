@@ -11,9 +11,117 @@ from pyscf.qr.hf import QR
 from pyscf.qr.intermediates import CasidaIntermediates
 from pyscf.qr.manifold import gxc_tensor_shape
 
+
 def _precompute_gxc(mf, G, occ_idx_n, occ_idx_m):
     '''Fill the 6-index :math:`g_\\text{xc}` buffer in place.'''
-    raise NotImplementedError('Gxc precomputation is not implemented yet.')
+    if not isinstance(mf, scf.hf.KohnShamDFT):
+        return G
+
+    # TODO: create logger from QR object instead as verbose option may be overwritten.
+    log = lib.logger.new_logger(mf)
+
+    # needed for make_rho
+    mo_occ = mf.mo_occ
+    mo_coeff = mf.mo_coeff
+    mol = mf.mol
+
+    occ_idx_n = numpy.asarray(occ_idx_n)
+    occ_idx_m = numpy.asarray(occ_idx_m)
+    assert mo_coeff.dtype == numpy.float64
+
+    nao = mo_coeff.shape[0]
+    occidx = numpy.where(mo_occ>0)[0]
+    viridx = numpy.where(mo_occ==0)[0]
+    nocc = len(occidx)
+    nvir = len(viridx)
+
+    nmo = nocc + nvir
+
+    # TODO: assert occ_idx_n/m is a subset of occidx
+
+    nocc_n = len(occ_idx_n)
+    nocc_m = len(occ_idx_m)
+
+    assert G.shape == (nocc,nvir,nocc_n,nvir,nocc_m,nvir)
+
+    # fxc contribution
+    ni = mf._numint
+    ni.libxc.test_deriv_order(mf.xc, 3, raise_error=True)
+
+    xctype = ni._xc_type(mf.xc)
+
+    dm0 = mf.make_rdm1(mo_coeff, mo_occ)
+    make_rho = ni._gen_rho_evaluator(mol, dm0, hermi=1, with_lapl=False)[0]
+
+    mem_now = lib.current_memory()[-1]
+    max_memory = max(2000, 40000*.9-mem_now)
+    max_memory *= 30 # Experimental constant
+    max_elements = max_memory * 1024**2 / 8
+    max_npoints = max_elements / (nocc*nvir*nocc_n*nvir*nocc_m*nvir)
+    blksize = int((max_npoints // 56) * 56)
+    log.note('Gxc block size %d', blksize)
+    mf.grids.build()
+    npoints = mf.grids.size
+    num_blocks = npoints//blksize +1
+    log.note('Num blocks: %d', num_blocks)
+
+    from time import perf_counter
+    start = perf_counter()
+    import tracemalloc
+    tracemalloc.start()
+    count=0
+
+    if xctype=='LDA':
+        ao_deriv = 0
+        for ao, mask, weight, coords in ni.block_loop(mol, mf.grids, nao, ao_deriv, max_memory//(nocc*nvir)):
+            rho = make_rho(0, ao, mask, xctype)
+            gxc = ni.eval_xc_eff(mf.xc, rho, deriv=3, xctype=xctype)[3]
+
+            rho = numpy.einsum('rp,pi->ri', ao, mo_coeff)
+            rho_xv = numpy.einsum('rp,rq->rpq', rho, rho[:,viridx])
+            rho_ov = rho_xv[:,occidx]
+            rho_man1_ov = rho_xv[:,occ_idx_n]
+            rho_man2_ov = rho_xv[:,occ_idx_m]
+
+            wgxc = gxc[0,0,0] * weight
+            w_ov = numpy.einsum('rkc,r->rkc', rho_man2_ov, wgxc, optimize=True)
+            w_ovov = numpy.einsum('rjb,rkc->rjbkc', rho_man1_ov, w_ov, optimize=True)
+            iajbkc = numpy.einsum('ria,rjbkc->iajbkc', rho_ov, w_ovov, optimize=True) * 4
+            G += iajbkc
+
+            _, mem_peak = tracemalloc.get_traced_memory()
+            count += 1
+            log.note('Gxc iter %g/%g: mem peak %.3f GB in %.0f s', count, num_blocks, mem_peak/1024**3, perf_counter()-start)
+            start = perf_counter()
+            tracemalloc.reset_peak()
+    elif xctype=='GGA':
+        ao_deriv = 1
+        for ao, mask, weight, coords in ni.block_loop(mol, mf.grids, nao, ao_deriv, blksize=blksize):
+            rho = make_rho(0, ao, mask, xctype)
+            gxc = ni.eval_xc_eff(mf.xc, rho, deriv=3, xctype=xctype)[3]
+
+            rho = numpy.einsum('xrp,pi->xri', ao, mo_coeff)
+            rho_xx = numpy.einsum('xrp,rq->xrpq', rho, rho[0])
+            rho_xx[1:4] += numpy.einsum('rp,xrq->xrpq', rho[0], rho[1:4])
+            rho_ov = rho_xx[:,:,occidx[:, None],viridx]
+            rho_man1_ov = rho_xx[:,:,occ_idx_n[:, None],viridx]
+            rho_man2_ov = rho_xx[:,:,occ_idx_m[:, None],viridx]
+
+            wgxc = gxc * weight
+            w_ov = numpy.einsum('xria,xyzr->yzria', rho_man2_ov, wgxc, optimize=True)
+            iajb = numpy.einsum('xria,xyrjb->yriajb', rho_man1_ov, w_ov, optimize=True)
+            iajbkc = numpy.einsum('xria,xrjbkc->iajbkc', rho_ov, iajb, optimize=True) * 4
+            G += iajbkc
+
+            _, mem_peak = tracemalloc.get_traced_memory()
+            count += 1
+            log.note('Gxc iter %g/%g: mem peak %.3f GB in %.0f s', count, num_blocks, mem_peak/1024**3, perf_counter()-start)
+            start = perf_counter()
+            tracemalloc.reset_peak()
+    else:
+        raise NotImplementedError(f'xctype = {xctype}')
+
+    return G
 
 
 def _get_2tdm_diag_block(x1, x2, y1, y2):
