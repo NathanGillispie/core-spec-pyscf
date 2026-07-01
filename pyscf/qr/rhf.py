@@ -435,11 +435,11 @@ class RQR(QR):
     oscillator_strength = oscillator_strength
 
     def _init_gxc(self):
-        nvirt = int(numpy.count_nonzero(self.mo_occ == 0))
-        shape = gxc_tensor_shape(
-            self._manifold_n, self._manifold_m, nvirt)
-        self._gxc = numpy.zeros(shape)
         if self.precompute_gxc:
+            nvirt = int(numpy.count_nonzero(self.mo_occ == 0))
+            shape = gxc_tensor_shape(
+                self._manifold_n, self._manifold_m, nvirt)
+            self._gxc = numpy.zeros(shape)
             self._gxc_backend = EagerGxc(self._gxc)
         else:
             self._gxc_backend = LazyGxc()
