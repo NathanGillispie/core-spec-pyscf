@@ -216,8 +216,20 @@ def test_qr_get_2tdm_implemented(h2_mf):
     td.kernel()
     qr = QR(td)
 
-    qr.get_2tdm(0, 1)
-    assert True
+    tdm = qr.get_2tdm(0, 1)
+    nmo = h2_mf.mo_coeff.shape[1]
+    assert tdm.shape == (nmo, nmo)
+
+
+@pytest.mark.parametrize('approximation', ['Nascimento', 'Zero', 'Pseudo'])
+def test_qr_get_2tdm_approximation(h2_mf, approximation):
+    td = RPA(h2_mf).set(nstates=2)
+    td.kernel()
+    qr = QR(td, approximation=approximation)
+
+    tdm = qr.get_2tdm(0, 1)
+    nmo = h2_mf.mo_coeff.shape[1]
+    assert tdm.shape == (nmo, nmo)
 
 
 def test_uqr_not_implemented():

@@ -31,40 +31,45 @@ class QR(lib.StreamObject):
     Construct from converged (or pending) TDSCF objects.  Linear response is
     run during initialization if needed; the tdobjs are not retained.
 
+    When calculating excited-to-excited state properties, excitations go from
+    manifold N to M.
+
     Parameters
     ----------
     tdobj_n : TDSCF
         Primary linear-response object.
     tdobj_m : TDSCF, optional
         Secondary linear-response object.  Defaults to ``tdobj_n``.
+
+    Keyword Arguments
+    -----------------
     chkfile : str, optional
         Checkpoint path.  When omitted, inherits from ``tdobj_n._scf.chkfile``.
     precompute_gxc : bool, optional
         When True, :meth:`kernel` stores the 6-index ``Gxc`` tensor in
-        memory for reuse by :meth:`get_2tdm``.
+        memory for reuse by :meth:`get_2tdm``. Defaults to False.
+    approximation : { None, 'Nascimento', 'Zero', 'Pseudo' }, optional
+        Sets the approximation for the Gxc term. Default is ``None``.
 
     Notes
     -----
-    **Checkpoint workflow:** call :meth:`save` after initialization (LR
-    complete) and before :meth:`kernel` (QR stage).  Resume with
-    :meth:`from_chk` and a live ``mf`` object.
-
-    Reference-specific subclasses (e.g. :class:`RQR`) implement ``g_xc``
-    contraction and 2TDM evaluation.
-
-    When calculating excited-to-excited state properties, excitations go from
-    manifold N to M.
+    Denial: The "Nascimento" approximation sets the off-diagonal block of 2TDM to 0.
+    Anger: The "Zero" approximation sets Gxc<-0. A Casida-ish problem is still solved.
+    Bargaining: The "Pseudo" (pseudo-wavefunction) approximation is not for speed.
+                It shifts divergences of the QR response function to ω=0.
+    Acceptance: None (default) approximation computes the full QR response.
     '''
 
     _keys = {
         'verbose', 'stdout', 'max_memory', 'mol', 'chkfile',
         'precompute_gxc', 'response_type', 'manifold_n', 'manifold_m',
+        'approximation', '_cached_intermediates',
     }
 
     precompute_gxc = False
 
     def __init__(self, tdobj_n, tdobj_m=None, *, chkfile=None,
-                 precompute_gxc=False):
+                 precompute_gxc=False, approximation=None):
         if tdobj_m is None:
             tdobj_m = tdobj_n
         elif tdobj_m is not tdobj_n:
@@ -78,6 +83,9 @@ class QR(lib.StreamObject):
         self.max_memory = mf.max_memory
         self.chkfile = chkfile if chkfile is not None else mf.chkfile
         self.precompute_gxc = bool(precompute_gxc)
+        self.approximation = approximation
+
+        self._cached_intermediates = None
 
         self._manifold_n = Manifold.from_tdobj(tdobj_n)
         if tdobj_m is tdobj_n:
@@ -89,7 +97,7 @@ class QR(lib.StreamObject):
         self._init_gxc()
 
     @classmethod
-    def _from_restored(cls, chkfile, mf, *, precompute_gxc=False):
+    def _from_restored(cls, chkfile, mf, *, precompute_gxc=False, approximation=None):
         '''Build a QR driver from a checkpoint file and a live mean-field object.
 
         Manifold data are read from *chkfile*; reference-specific behavior is
@@ -107,6 +115,7 @@ class QR(lib.StreamObject):
         self.max_memory = mf.max_memory
         self.chkfile = chkfile
         self.precompute_gxc = bool(precompute_gxc)
+        self.approximation = approximation
 
         self._manifold_n = manifold_n
         self._manifold_m = manifold_m

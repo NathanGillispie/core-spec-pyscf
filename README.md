@@ -96,8 +96,8 @@ You can find details on other extensions in the [extensions](https://pyscf.org/u
 ## TODO:
 - [ ] $\omega$-dependent Quadratic Response
 - [ ] 2-photon absorption
-- [ ] Cache 2TDM intermediate quantities.
-- [ ] Add Gxc approximations
+- [x] Cache 2TDM intermediate quantities.
+- [x] Add Gxc approximations
 - [x] Transition dipole moment (restricted)
 - [ ] Option to compute $g_\text{xc}$ at once or on-the-fly
     - [x] LazyGxc

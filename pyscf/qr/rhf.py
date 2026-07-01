@@ -365,42 +365,64 @@ class RQR(QR):
             Shape ``(nmo, nmo)``.
         '''
         self._sanity_check_2tdm(i, j)
-
         log = lib.logger.new_logger(self)
-        log.info('  Computing C.')
 
-        # TODO: cache these! The next two LOC are pure functions.
-        C = _compute_c(self._scf)
-        nocc, nvirt = C.shape[:2]
-        A, B = _get_ab_from_c(C, self.mo_energy)
-        Lambda = numpy.block([[A,B],[B,A]])
-        Delta = numpy.eye(2*nocc*nvirt)
-        Delta[nocc*nvirt:] *= -1
+        if self.approximation not in ('Nascimento', 'Zero', 'Pseudo', None):
+            raise ValueError('Invalid approxiamtion requested! Options are '
+                             '\'Nascimento\', \'Zero\', \'Pseudo\', and None')
+        log.info(f'  Using {self.approximation!r:s} approx.')
 
-        log.info('  LHS of Casida eq. fully determined. Computing Gxc term.')
-        x1_g, y1_g = self._manifold_n.xy[i]
-        x2_g, y2_g = self._manifold_m.xy[j]
-
-        if self.response_type == 'tda':
-            V = self._gxc_backend.contract_v(self._scf, x1_g, x2_g)
-        else:
-            V = self._gxc_backend.contract_v(self._scf, x1_g + y1_g, x2_g + y2_g)
-
-        log.info('  Gxc done. Determining RHS of Casida eq.')
-        # Making explicit these quantities WILL NOT BE USED later.
-        # Instead, we will get XY aligned to MO orbital indexing
-        del x1_g, y1_g, x2_g, y2_g
-
+        log.info('  Computing diagonal blocks of 2TDM.')
         e1, (x1, y1) = self._manifold_n(i)
         e2, (x2, y2) = self._manifold_m(j)
-
         tdm = _get_2tdm_diag_block(x1, x2, y1, y2)
+        if self.approximation == 'Nascimento': # TODO: to_lower str if not None
+            return tdm
+
+        # TODO: cache these! The next two LOC are pure functions.
+        if self._cached_intermediates is not None:
+            log.info('  Found cached intermediates. Not recomputing C.')
+            C, Lambda, Delta = self._cached_intermediates
+            nocc, nvirt = C.shape[:2]
+        else:
+            log.info('  Computing C.')
+            C = _compute_c(self._scf)
+            nocc, nvirt = C.shape[:2]
+            A, B = _get_ab_from_c(C, self.mo_energy)
+            Lambda = numpy.block([[A,B],[B,A]])
+            Delta = numpy.eye(2*nocc*nvirt)
+            Delta[nocc*nvirt:] *= -1
+
+            self._cached_intermediates = C, Lambda, Delta
+
+        log.info('  LHS of Casida eq. fully determined. Computing Gxc term.')
+
+        if self.approximation == 'Zero':
+            V = numpy.zeros((nocc, nvirt))
+        else:
+            x1_g, y1_g = self._manifold_n.xy[i]
+            x2_g, y2_g = self._manifold_m.xy[j]
+
+            if self.response_type == 'tda':
+                V = self._gxc_backend.contract_v(self._scf, x1_g, x2_g)
+            else:
+                V = self._gxc_backend.contract_v(self._scf, x1_g + y1_g, x2_g + y2_g)
+
+            # Making explicit these quantities WILL NOT BE USED later.
+            # Instead, we will get XY aligned to MO orbital indexing
+            del x1_g, y1_g, x2_g, y2_g
+
+        log.info('  Gxc done. Determining RHS of Casida eq.')
 
         Pia, Qia = _get_pq(C, tdm, V, x1, x2, y1, y2)
         pqm = numpy.reshape((Pia, Qia), -1)
 
-        log.info('  Solving Casida eq. with ω = ΩM - ΩN.')
-        xym = numpy.linalg.solve(Lambda - (e2-e1)*Delta, -pqm)
+        if self.approximation == 'Pseudo':
+            log.info('  Solving Casida eq. with ω = 0.')
+            xym = numpy.linalg.solve(Lambda, -pqm)
+        else:
+            log.info('  Solving Casida eq. with ω = ΩM - ΩN.')
+            xym = numpy.linalg.solve(Lambda - (e2-e1)*Delta, -pqm)
         _x2, _y2 = numpy.reshape(xym, (2,nocc,nvirt))
 
         # Fill in off-diagonal blocks of 2TDM. Some flip the convention by
