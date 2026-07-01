@@ -1,6 +1,8 @@
 # Core spectroscopy for [PySCF](https://github.com/pyscf/pyscf)
 [![pytest](https://github.com/NathanGillispie/core-spec-pyscf/actions/workflows/ci.yml/badge.svg)](https://github.com/NathanGillispie/core-spec-pyscf/actions/workflows/ci.yml)
 
+I'm proud to announce that this repo now has the first open-source implementation of excited-excited state transition moments from TDDFT response theory (for GGA + LDA functionals and restricted references)! VeloxChem beat me to frequency-dependent QR... This was very difficult, but necessary for my PhD work.
+
 ## Background
 Core spectroscopy often involves excitations from a relatively small number of core orbitals. This is a huge advantage for linear response Time-Dependent Density Functional Theory (TDDFT) since you can apply core-valence separation. In theory, core orbitals and valence orbitals have such vastly different localizations and energies that they are separable in the Schrödinger equation to good approximation.[^1]
 
@@ -12,9 +14,9 @@ PySCF provides a good basis for TDDFT calculations. However, some things are inc
 
 3. **No ZORA.** The best scalar-relativistic correction.[^3]
 
-4. **Quadratic response** is not available in PySCF, so no Resonant-Inelastic X-ray Scattering (RIXS) calculations.
+4. **Quadratic response** is not available in PySCF. Excited-to-excited state transition dipole moments are needed for my Resonant-Inelastic X-ray Scattering (RIXS) calculations.
 
-5. **No core-valence separation approximation.** Update: this was added recently as an option to specify "frozen orbitals".
+5. **No core-valence separation approximation.** Update: this was added recently as an option to specify frozen orbitals.
 
 ### Details
 - The diagonalization of Casida's equation[^4]
@@ -93,11 +95,17 @@ You can find details on other extensions in the [extensions](https://pyscf.org/u
 
 ## TODO:
 - [ ] $\omega$-dependent Quadratic Response
-- [ ] Dipole transition moments from QR
 - [ ] 2-photon absorption
+- [ ] Cache 2TDM intermediate quantities.
+- [ ] Add Gxc approximations
+- [x] Transition dipole moment (restricted)
 - [ ] Option to compute $g_\text{xc}$ at once or on-the-fly
-- [x] Frozen orbitals
-- [ ] Checkpoints
+    - [x] LazyGxc
+    - [ ] EagerGxc
+- [ ] Frozen orbitals
+    - [ ] LazyGxc
+    - [x] EagerGxc
+- [x] Checkpoints
 
 [^1]: Cederbaum, L. S.; Domcke, W.; Schirmer, J. Many-Body Theory of Core Holes. _Phys. Rev. A_ **1980**, _22_ (1), 206–222. [doi.org/10.1103/PhysRevA.22.206](https://doi.org/10.1103/PhysRevA.22.206).
 
