@@ -113,8 +113,6 @@ class Manifold:
         Excitation energies in Hartree, shape ``(nstates,)``.
     xy : tuple of (ndarray, ndarray or None)
         PySCF-style amplitudes per state.  ``y is None`` for TDA.
-    nstates : int or None
-        Number of roots requested from the LR calculation (metadata).
     '''
 
     mol: object
@@ -123,7 +121,6 @@ class Manifold:
     occ_idx: numpy.ndarray
     e: numpy.ndarray
     xy: tuple
-    nstates: int | None = None
 
     def __post_init__(self):
         object.__setattr__(self, 'mo_coeff', numpy.asarray(self.mo_coeff))
@@ -170,7 +167,6 @@ class Manifold:
         mf = tdobj._scf
         frozen = getattr(tdobj, 'frozen', None)
         occ_idx = _active_occ_idx(mf, frozen)
-        nstates = getattr(tdobj, 'nstates', None)
 
         return cls(
             mol=mf.mol,
@@ -179,7 +175,6 @@ class Manifold:
             occ_idx=occ_idx,
             e=numpy.asarray(tdobj.e),
             xy=_normalize_xy(tdobj.xy),
-            nstates=nstates,
         )
 
     # TODO: VERIFY VERIFY VERIFY this function
@@ -255,7 +250,6 @@ class Manifold:
             'occ_idx': self.occ_idx.tolist(),
             'e': self.e.tolist(),
             'xy': _encode_xy(self.xy),
-            'nstates': self.nstates,
         }
         return json.dumps(payload)
 
@@ -278,7 +272,6 @@ class Manifold:
             occ_idx=payload['occ_idx'],
             e=payload['e'],
             xy=_decode_xy(payload['xy']),
-            nstates=payload.get('nstates'),
         )
 
     def dumps(self):

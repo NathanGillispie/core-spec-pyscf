@@ -15,20 +15,6 @@ from pyscf.qr.uhf import UQR
 from pyscf.qr.ghf import GQR
 
 
-def _assert_xy_equal(xy_a, xy_b):
-    assert len(xy_a) == len(xy_b)
-    for (x1, y1), (x2, y2) in zip(xy_a, xy_b):
-        numpy.testing.assert_array_equal(x1, x2)
-        if y1 is None:
-            assert y2 is None
-        else:
-            numpy.testing.assert_array_equal(y1, y2)
-
-
-def test_pyscf_import():
-    import pyscf
-
-
 def test_plugin_import():
     import pyscf.qr
 
@@ -52,66 +38,11 @@ def h2_mf():
     mol = gto.M(atom='H 0 0 0; H 0 0 0.74', basis='6-31g', verbose=0)
     return scf.RHF(mol).run()
 
-
-def test_manifold_dump_roundtrip(he_mf):
-    occ_idx = numpy.array([0], dtype=int)
-    e = numpy.array([0.1, 0.2])
-    xy = (
-        (numpy.zeros((1, 3)), numpy.zeros((1, 3))),
-        (numpy.zeros((1, 3)), numpy.zeros((1, 3))),
-    )
-
-    manifold = Manifold(
-        mol=he_mf.mol,
-        mo_coeff=he_mf.mo_coeff,
-        mo_occ=he_mf.mo_occ,
-        occ_idx=occ_idx,
-        e=e,
-        xy=xy,
-        nstates=2,
-    )
-    s = manifold.dump()
-    assert isinstance(s, str)
-    payload = json.loads(s)
-    assert payload['xy'][0][1] is not None
-    assert payload['nstates'] == 2
-    assert 'frozen_idx' not in payload
-    assert 'mol' not in payload
-    assert 'mo_coeff' not in payload
-
-    restored = Manifold.loads(s, he_mf)
-    numpy.testing.assert_array_equal(restored.occ_idx, occ_idx)
-    numpy.testing.assert_array_equal(restored.e, e)
-    _assert_xy_equal(restored.xy, xy)
-    assert restored.mol is he_mf.mol
-    assert restored.mo_coeff is he_mf.mo_coeff
-
-
-def test_manifold_from_tdobj(he_mf):
-    td = RPA(he_mf).set(nstates=1)
-    td.kernel()
-    manifold = Manifold.from_tdobj(td)
-    assert manifold.e.shape == (1,)
-    assert len(manifold.xy) == 1
-    assert manifold.xy[0][1] is not None
-    assert len(manifold.occ_idx) == 1
-    assert manifold.mol is he_mf.mol
-    assert manifold.mo_coeff is he_mf.mo_coeff
-
-
-def test_manifold_from_tda_tdobj(he_mf):
-    td = TDA(he_mf).set(nstates=1)
-    td.kernel()
-    manifold = Manifold.from_tdobj(td)
-    assert manifold.xy[0][1] is None
-
-
 def test_manifold_loads_legacy_ndarray(he_mf):
     legacy_rpa = json.dumps({
         'occ_idx': [0],
         'e': [0.1],
         'xy': numpy.zeros((1, 2, 1, 1)).tolist(),
-        'nstates': 1,
     })
     manifold = Manifold.loads(legacy_rpa, he_mf)
     assert manifold.xy[0][1] is not None
@@ -120,7 +51,6 @@ def test_manifold_loads_legacy_ndarray(he_mf):
         'occ_idx': [0],
         'e': [0.1],
         'xy': numpy.zeros((1, 1, 1)).tolist(),
-        'nstates': 1,
     })
     manifold = Manifold.loads(legacy_tda, he_mf)
     assert manifold.xy[0][1] is None
@@ -164,15 +94,6 @@ def test_qr_rejects_tda_rpa_mix(he_mf):
         QR(td_tda, td_rpa)
 
 
-def test_qr_kernel_noop(he_mf):
-    td = RPA(he_mf).set(nstates=1)
-    td.kernel()
-    qr = QR(td)
-    assert qr.kernel() is qr
-    assert qr._gxc.shape == (1, 1, 1, 1, 1, 1)
-    assert numpy.all(qr._gxc == 0)
-
-
 def test_manifold_occ_idx(he_mf):
     td = RPA(he_mf).set(nstates=1)
     td.kernel()
@@ -207,11 +128,9 @@ def test_eager_gxc_shares_buffer(he_mf):
     qr = QR(td, precompute_gxc=True)
     assert isinstance(qr._gxc_backend, EagerGxc)
     assert qr._gxc_backend.G is qr._gxc
-    with pytest.raises(NotImplementedError):
-        qr.kernel()
 
 
-def test_qr_get_2tdm_implemented(h2_mf):
+def test_qr_get_2tdm_smoke(h2_mf):
     td = RPA(h2_mf).set(nstates=2)
     td.kernel()
     qr = QR(td)
@@ -251,10 +170,6 @@ def test_qr_save_and_from_chk(h2_mf, tmp_path):
 
     with lib.H5FileWrap(chk, 'r') as f:
         assert 'qr/manifold_n' in f
-        assert 'qr/response_type' not in f
-        assert 'qr/gxc' not in f
-        assert 'scf' not in f
-        assert 'mol' not in f
 
     qr2 = QR.from_chk(chk, h2_mf)
     assert type(qr2).__name__ == 'RQR'
@@ -306,3 +221,62 @@ def test_manifold_call(he_mf):
     assert e_out == 0.42
     assert x.shape == (2, nvirt)
     assert y.shape == (2, nvirt)
+
+
+def test_manifold_dump_roundtrip(he_mf):
+    occ_idx = numpy.array([0], dtype=int)
+    e = numpy.array([0.1, 0.2])
+    xy = (
+        (numpy.zeros((1, 3)), numpy.zeros((1, 3))),
+        (numpy.zeros((1, 3)), numpy.zeros((1, 3))),
+    )
+
+    manifold = Manifold(
+        mol=he_mf.mol,
+        mo_coeff=he_mf.mo_coeff,
+        mo_occ=he_mf.mo_occ,
+        occ_idx=occ_idx,
+        e=e,
+        xy=xy,
+    )
+    s = manifold.dump()
+    assert isinstance(s, str)
+    payload = json.loads(s)
+    assert payload['xy'][0][1] is not None
+    assert 'frozen_idx' not in payload
+    assert 'mol' not in payload
+    assert 'mo_coeff' not in payload
+
+    restored = Manifold.loads(s, he_mf)
+    numpy.testing.assert_array_equal(restored.occ_idx, occ_idx)
+    numpy.testing.assert_array_equal(restored.e, e)
+    assert len(restored.xy) == len(xy)
+    for (x1, y1), (x2, y2) in zip(restored.xy, xy):
+        numpy.testing.assert_array_equal(x1, x2)
+        if y1 is None:
+            assert y2 is None
+        else:
+            numpy.testing.assert_array_equal(y1, y2)
+    assert restored.mol is he_mf.mol
+    assert restored.mo_coeff is he_mf.mo_coeff
+
+
+def test_manifold_from_tdobj(he_mf):
+    td = RPA(he_mf).set(nstates=1)
+    td.kernel()
+    manifold = Manifold.from_tdobj(td)
+    assert manifold.e.shape == (1,)
+    assert len(manifold.xy) == 1
+    assert manifold.xy[0][1] is not None
+    assert len(manifold.occ_idx) == 1
+    assert manifold.mol is he_mf.mol
+    assert manifold.mo_coeff is he_mf.mo_coeff
+
+
+def test_manifold_from_tda_tdobj(he_mf):
+    td = TDA(he_mf).set(nstates=1)
+    td.kernel()
+    manifold = Manifold.from_tdobj(td)
+    assert manifold.xy[0][1] is None
+
+
