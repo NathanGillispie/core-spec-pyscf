@@ -32,7 +32,7 @@ reference implementations.
 
 from pyscf.qr.hf import QR, qr_class_for_mf
 from pyscf.qr.manifold import Manifold, gxc_tensor_shape
-from pyscf.qr.rhf import RQR, LazyGxc, EagerGxc
+from pyscf.qr.rhf import RQR, Gxc
 from pyscf.qr.uhf import UQR
 from pyscf.qr.ghf import GQR
 
@@ -45,8 +45,7 @@ __all__ = [
     'RQR',
     'UQR',
     'GQR',
-    'LazyGxc',
-    'EagerGxc',
+    'Gxc',
     'gxc_tensor_shape',
 ]
 

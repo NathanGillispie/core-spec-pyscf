@@ -260,21 +260,58 @@ def _get_ab_from_c(C, mo_energy):
     return numpy.reshape((A,B), (2,nocc*nvirt,nocc*nvirt))
 
 
-class LazyGxc:
-    '''Compute :math:``g_\\text{xc}`` new each time for each state pair.
+class Gxc:
+    '''Contract the :math:`g_\\text{xc}` kernel against two excited states.
 
-    Avoids storing the 6-index tensor but repeats grid work per call.
+    A single backend supports both evaluation strategies:
 
-    Notes
-    -----
-    Generally faster than :class:``EagerGxc`` when you only need a few calls.
+    * **Eager** – when ``precompute`` is requested, a 6-index tensor of shape
+      ``(nocc, nvirt, nocc_n, nvirt_n, nocc_m, nvirt_m)`` is allocated at
+      construction and filled in place by :meth:`precompute`.  Each
+      :meth:`contract_v` call is then a cheap tensor contraction.  The tensor
+      is never written to checkpoint files.
+    * **Lazy** – otherwise the grid work is repeated on every
+      :meth:`contract_v` call, avoiding the memory cost of the 6-index tensor.
+      Generally faster when only a few calls are needed.
     '''
 
+    def __init__(self, qr, precompute=False):
+        self.occ_idx_n = numpy.asarray(qr._manifold_n.occ_idx)
+        self.occ_idx_m = numpy.asarray(qr._manifold_m.occ_idx)
+
+        self.G = None
+        if precompute:
+            nvirt = int(numpy.count_nonzero(qr.mo_occ == 0))
+            shape = gxc_tensor_shape(
+                qr._manifold_n, qr._manifold_m, nvirt)
+            self.G = numpy.zeros(shape)
+
+    @property
+    def precompute_gxc(self):
+        '''True when running in eager mode with an in-memory tensor.'''
+        return self.G is not None
+
+    def precompute(self, mf):
+        '''Fill the in-memory 6-index tensor (eager mode only).
+
+        No-op unless the backend was constructed with ``precompute=True``.
+        '''
+        if self.G is None:
+            return self
+        _precompute_gxc(mf, self.G, self.occ_idx_n, self.occ_idx_m)
+        return self
+
     def contract_v(self, mf, xpy1, xpy2, mo_occ=None):
-        '''Return the ``V_ia`` vector given two excitated states.
+        '''Return the ``V_ia`` vector given two excited states.
 
         ``xpy1`` represents the sum of ``x1`` and ``y1``: the first excitation.
+        In eager mode this contracts the precomputed tensor; otherwise the
+        grid work is repeated here.
         '''
+        if self.G is not None:
+            return numpy.einsum(
+                'iajbkc,jb,kc->ia', self.G, xpy1, xpy2, optimize=True)
+
         if mo_occ is None: mo_occ = mf.mo_occ
         mo_energy = mf.mo_energy
         mo_coeff = mf.mo_coeff
@@ -293,7 +330,7 @@ class LazyGxc:
 
         if (xpy1.shape[0] < nocc) or (xpy2.shape[0] < nocc):
             raise NotImplementedError('Frozen orbitals not yet implemented for '
-                                      'LazyGxc evaluation!') # TODO: this
+                                      'lazy Gxc evaluation!') # TODO: this
 
         G = numpy.zeros((nocc,nvir))
 
@@ -335,7 +372,7 @@ class LazyGxc:
         elif xctype=='LDA':
             ao_deriv = 0
             for ao, mask, weight, coords in ni.block_loop(mol, mf.grids, nao, ao_deriv, max_memory):
-                lib.logger.warn(mf, 'LazyGxc contraction for LDA functionals: '
+                lib.logger.warn(mf, 'Lazy Gxc contraction for LDA functionals: '
                                     'running untested code!') # TODO: test this
 
                 rho = make_rho(0, ao, mask, xctype)
@@ -357,26 +394,6 @@ class LazyGxc:
             raise NotImplementedError(f'xctype = {xctype}')
 
         return G
-
-
-class EagerGxc:
-    '''Contract :math:`g_\\text{xc}` from a precomputed 6-index tensor in memory.
-
-    ``G`` has shape ``(nocc, nvirt, nocc_n, nvirt_n, nocc_m, nvirt_m)`` and is
-    filled in place by :meth:`RQR.kernel` when ``precompute_gxc=True``.  The
-    tensor is never written to checkpoint files.
-
-    The last two pairs of indices will differ when any of the two excited states
-    used frozen orbitals for the linear response calculation. That assumption
-    allows a lot of space/computation to be saved. It also means that no padding
-    or reshaping is required from excitation vectors before :meth:``contract_v``.
-    '''
-
-    def __init__(self, G):
-        self.G = G
-
-    def contract_v(self, mf, xpy1, xpy2, mo_occ=None):
-        return numpy.einsum('iajbkc,jb,kc->ia', self.G, xpy1, xpy2, optimize=True)
 
 
 def transition_dipole(qrobj, tdm):
@@ -435,14 +452,8 @@ class RQR(QR):
     oscillator_strength = oscillator_strength
 
     def _init_gxc(self):
-        if self.precompute_gxc:
-            nvirt = int(numpy.count_nonzero(self.mo_occ == 0))
-            shape = gxc_tensor_shape(
-                self._manifold_n, self._manifold_m, nvirt)
-            self._gxc = numpy.zeros(shape)
-            self._gxc_backend = EagerGxc(self._gxc)
-        else:
-            self._gxc_backend = LazyGxc()
+        self._gxc_backend = Gxc(self, precompute=self.precompute_gxc)
+
 
     def _build_intermediates(self):
         C = _compute_c(self._scf)
@@ -455,10 +466,9 @@ class RQR(QR):
         log.info('QR kernel: manifolds ready (n=%d, m=%d states)',
                  len(self._manifold_n.e), len(self._manifold_m.e))
         if self.precompute_gxc:
-            log.info('QR kernel: precomputing Gxc (%s)', self._gxc.shape)
-            _precompute_gxc(
-                self._scf, self._gxc,
-                self._manifold_n.occ_idx, self._manifold_m.occ_idx)
+            log.info('QR kernel: precomputing Gxc (%s)',
+                     self._gxc_backend.G.shape)
+            self._gxc_backend.precompute(self._scf)
         return self
 
     def get_2tdm(self, i, j):

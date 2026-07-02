@@ -11,7 +11,7 @@ from pyscf.qr.rhf import (
     _compute_c,
     _get_2tdm_diag_block,
     _get_pq,
-    LazyGxc,
+    Gxc,
 )
 
 # ---------------------------------------------------------------------------
@@ -44,7 +44,10 @@ def lih_intermediates():
     mf.mo_occ = data['mo_occ']
 
     out = {}
-    backend = LazyGxc()
+    td = RPA(mf).set(nstates=4)
+    td.kernel()
+    backend = QR(td, precompute_gxc=False)._gxc_backend
+    assert isinstance(backend, Gxc)
     C_qr = _compute_c(mf)
     for (n, m) in _PAIRS:
         x1, y1 = data[f'x{n}'], data[f'y{n}']

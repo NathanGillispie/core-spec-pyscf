@@ -10,7 +10,7 @@ from pyscf.tdscf import RPA, TDA
 import pyscf.qr
 from pyscf.qr import Manifold, QR
 from pyscf.qr.manifold import gxc_tensor_shape
-from pyscf.qr.rhf import EagerGxc
+from pyscf.qr.rhf import Gxc
 from pyscf.qr.uhf import UQR
 from pyscf.qr.ghf import GQR
 
@@ -122,12 +122,22 @@ def test_gxc_tensor_shape_two_manifolds(he_mf):
     assert shape == (1, nvirt, 1, 1, 2, 1)
 
 
-def test_eager_gxc_shares_buffer(he_mf):
+def test_eager_gxc_allocates_buffer(he_mf):
     td = RPA(he_mf).set(nstates=1)
     td.kernel()
     qr = QR(td, precompute_gxc=True)
-    assert isinstance(qr._gxc_backend, EagerGxc)
-    assert qr._gxc_backend.G is qr._gxc
+    assert isinstance(qr._gxc_backend, Gxc)
+    assert qr._gxc_backend.precompute_gxc
+    assert qr._gxc_backend.G is not None
+
+
+def test_lazy_gxc_has_no_buffer(he_mf):
+    td = RPA(he_mf).set(nstates=1)
+    td.kernel()
+    qr = QR(td, precompute_gxc=False)
+    assert isinstance(qr._gxc_backend, Gxc)
+    assert not qr._gxc_backend.precompute_gxc
+    assert qr._gxc_backend.G is None
 
 
 def test_qr_get_2tdm_smoke(h2_mf):

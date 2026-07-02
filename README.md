@@ -99,12 +99,10 @@ You can find details on other extensions in the [extensions](https://pyscf.org/u
 - [x] Cache 2TDM intermediate quantities.
 - [x] Add Gxc approximations
 - [x] Transition dipole moment (restricted)
-- [ ] Option to compute $g_\text{xc}$ at once or on-the-fly
-    - [x] LazyGxc
-    - [ ] EagerGxc
+- [x] Option to compute $g_\text{xc}$ at once or on-the-fly
 - [ ] Frozen orbitals
-    - [ ] LazyGxc
-    - [x] EagerGxc
+    - [ ] Gxc (lazy mode)
+    - [x] Gxc (eager mode)
 - [x] Checkpoints
 
 [^1]: Cederbaum, L. S.; Domcke, W.; Schirmer, J. Many-Body Theory of Core Holes. _Phys. Rev. A_ **1980**, _22_ (1), 206–222. [doi.org/10.1103/PhysRevA.22.206](https://doi.org/10.1103/PhysRevA.22.206).
