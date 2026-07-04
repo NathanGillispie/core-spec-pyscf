@@ -29,7 +29,7 @@ is done in its hermitian form, assuming $(\mathbf{A}-\mathbf{B})$ and $(\mathbf{
 ```
 - When removing the $f_\text{xc}$ term, the exact Hartree exchange is included, regardless of the functional used. Due to technical reasons, direct diagonalization is always used with `no_fxc`. Given the reasons above, I probably won't change this.
 - The ZORA correction uses a model basis. The exact values come from [NWCHEM](https://nwchemgit.github.io/).
-- Quadratic response is implemented in ``pyscf.qr`` for restricted RHF/RKS references (RPA and TDA). The driver builds linear-response manifolds from TDSCF objects, solves a Casida-like equation for the off-diagonal blocks of the excited-to-excited transition density matrix (2TDM), and exposes transition dipole moments and oscillator strengths.
+- Quadratic response is implemented in `pyscf.qr` for restricted RHF/RKS references (RPA and TDA). The driver builds linear-response manifolds from TDSCF objects, solves a Casida-like equation for the off-diagonal blocks of the excited-to-excited transition density matrix (2TDM), and exposes transition dipole moments and oscillator strengths.
 
 ## Usage
 
@@ -72,9 +72,9 @@ tdobj.direct_diag = True
 tdobj.kernel()
 ```
 
-### Quadratic response (`QR`)
+### Quadratic response
 
-Excited-to-excited state properties are computed with the ``QR`` driver in ``pyscf.qr``. Import the module, run a linear-response calculation, then construct a ``QR`` object from the resulting TDSCF object:
+Excited-to-excited state properties are computed with the `QR` driver in `pyscf.qr`. Import the module, run a linear-response calculation, then construct a `QR` object from the resulting TDSCF object:
 
 ```py
 from pyscf import gto, dft
@@ -93,7 +93,7 @@ tdm = qrobj.get_2tdm(0, 3)          # 2TDM for state 0 -> state 3
 tdip = qrobj.transition_dipole(tdm)  # (x, y, z) dipole vector
 ```
 
-TDSCF objects are consumed at initialization: if linear response has not been run yet, ``QR`` calls ``kernel()`` for you and builds internal ``Manifold`` objects. The original ``tdobj`` is not retained.
+TDSCF objects are consumed at initialization: if linear response has not been run yet, `QR` calls `kernel()` for you and builds internal `Manifold` objects. The original `tdobj` is not retained.
 
 When both excited states come from the same active occupied subspace, a single TDSCF object is enough. For excitations out of different core (frozen-orbital) subspaces, pass two TDSCF objects that share the same mean-field reference:
 
@@ -105,11 +105,11 @@ qrobj = QR(td_n, td_m)
 tdm = qrobj.get_2tdm(2, 0)
 ```
 
-Both ``RPA`` and ``TDA`` manifolds are supported; mixing TDA and RPA in a QR calculation is not allowed.
+Both `RPA` and `TDA` manifolds are supported; mixing TDA and RPA in a QR calculation is not allowed.
 
 #### Options
-- ``precompute_gxc`` (default ``False``): when ``True``, call ``qrobj.kernel()`` to fill the six-index :math:`g_\text{xc}` tensor in memory before repeated ``get_2tdm`` calls. The default lazy mode recomputes the grid contraction on each call and is usually faster for a small number of state pairs.
-- ``approximation``: approximate the :math:`g_\text{xc}` contribution. ``None`` (default) is the full quadratic response; ``'Nascimento'`` zeros the off-diagonal 2TDM blocks; ``'Zero'`` sets :math:`g_\text{xc} \leftarrow 0`; ``'Pseudo'`` uses the pseudo-wavefunction approximation (shifts divergences to :math:`\omega = 0`). The approximation can also be changed after construction, e.g. ``qrobj.approximation = 'Pseudo'``.
+- `precompute_gxc` (default `False`): when `True`, call `qrobj.kernel()` to fill the six-index $g_\text{xc}$ tensor in memory before repeated `get_2tdm` calls. The default lazy mode recomputes the grid contraction on each call and is usually faster for a small number of state pairs.
+- `approximation`: approximate the $g_\text{xc}$ contribution. `None` (default) is the full quadratic response; `'Nascimento'` zeros the off-diagonal 2TDM blocks; `'Zero'` sets $g_\text{xc} \leftarrow 0$; `'Pseudo'` uses the pseudo-wavefunction approximation (shifts divergences to $\omega = 0$). The approximation can also be changed after construction, e.g. `qrobj.approximation = 'Pseudo'`.
 
 **Note:** to use the precomputed gxc, you must run the `kernel` method.
 
@@ -125,7 +125,7 @@ qrobj.kernel()                       # optional; needed if precompute_gxc=True
 tdm = qrobj.get_2tdm(0, 1)
 ```
 
-See ``examples/qr/LiH-all_approx.py`` for a program demonstrating unphysical divergences in the 2TDM. In it we show QR transition dipoles against FCI and several :math:`g_\text{xc}` approximations. The produced graph is designed to replicate ref. 5.[^5]
+See `examples/qr/LiH-all_approx.py` for a program demonstrating unphysical divergences in the 2TDM. In it we show QR transition dipoles against FCI and several $g_\text{xc}$ approximations. The produced graph is designed to replicate ref. 5.[^5]
 
 ![LiH transition dipole moment between first and fourth excited states with respect to bond length.](./examples/qr/LiH-all_approx_reference.svg)
 
@@ -174,5 +174,5 @@ You can find details on other extensions in the [extensions](https://pyscf.org/u
 
 [^4]: Casida, M. E. Time-Dependent Density Functional Response Theory for Molecules. In _Recent Advances in Density Functional Methods_; Recent Advances in Computational Chemistry; World Scientific, **1995**; Vol. 1, pp 155–192. [doi.org/10.1142/9789812830586_0005](https://doi.org/10.1142/9789812830586_0005)
 
-[^5] Parker, S. M.; Roy, S.; Furche, F. Unphysical Divergences in Response Theory. _J. Chem. Phys._ **2016**, _145_ (13), 134105. [doi.org/10.1063/1.4963749](https://doi.org/10.1063/1.4963749)
+[^5]: Parker, S. M.; Roy, S.; Furche, F. Unphysical Divergences in Response Theory. _J. Chem. Phys._ **2016**, _145_ (13), 134105. [doi.org/10.1063/1.4963749](https://doi.org/10.1063/1.4963749)
 
