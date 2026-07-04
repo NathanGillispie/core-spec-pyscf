@@ -11,7 +11,7 @@ include = ["pyscf.*"]
 
 [project]
 name = "core-spec-pyscf"
-version = "0.3"
+version = "0.4"
 authors = [
     { name = "Nathan Gillispie", email = "nwgllspe@memphis.edu" }
 ]
