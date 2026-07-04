@@ -274,6 +274,12 @@ class Gxc:
     * **Lazy** – otherwise the grid work is repeated on every
       :meth:`contract_v` call, avoiding the memory cost of the 6-index tensor.
       Generally faster when only a few calls are needed.
+
+    The active occupied indices for each manifold, ``occ_idx_n`` and
+    ``occ_idx_m``, are taken from the :class:`QR` instance at initialization.
+    When either manifold uses frozen orbitals the last two pairs of eager
+    indices differ, which saves space/computation and means no padding is
+    required from excitation vectors before :meth:`contract_v`.
     '''
 
     def __init__(self, qr, precompute=False):
@@ -308,10 +314,23 @@ class Gxc:
         ``xpy1`` represents the sum of ``x1`` and ``y1``: the first excitation.
         In eager mode this contracts the precomputed tensor; otherwise the
         grid work is repeated here.
+
+        The shape of ``xpy`` should always be ``(nocc, nvirt)`` regardless of
+        if there are frozen orbital indices.
+
+        Notes
+        -----
+        The lazy evaluation here does not remove frozen orbitals. The frozen
+        orbital indices are zeros and when contracted waste computation. The
+        contraction from xy to grid space may be faster if xy was sliced. Since
+        this contraction isn't the bottleneck, I'm not going to try to fix it.
         '''
         if self.G is not None:
+            # Optimized for frozen orbitals
+            xpy1_ = xpy1[self.occ_idx_n]
+            xpy2_ = xpy2[self.occ_idx_m]
             return numpy.einsum(
-                'iajbkc,jb,kc->ia', self.G, xpy1, xpy2, optimize=True)
+                'iajbkc,jb,kc->ia', self.G, xpy1_, xpy2_, optimize=True)
 
         if mo_occ is None: mo_occ = mf.mo_occ
         mo_energy = mf.mo_energy
@@ -328,10 +347,6 @@ class Gxc:
         nvir = orbv.shape[1]
         nocc = orbo.shape[1]
         mo = numpy.hstack((orbo,orbv))
-
-        if (xpy1.shape[0] < nocc) or (xpy2.shape[0] < nocc):
-            raise NotImplementedError('Frozen orbitals not yet implemented for '
-                                      'lazy Gxc evaluation!') # TODO: this
 
         G = numpy.zeros((nocc,nvir))
 
@@ -513,17 +528,10 @@ class RQR(QR):
         if self.approximation == 'Zero':
             V = numpy.zeros((nocc, nvirt))
         else:
-            x1_g, y1_g = self._manifold_n.xy[i]
-            x2_g, y2_g = self._manifold_m.xy[j]
-
             if self.response_type == 'tda':
-                V = self._gxc_backend.contract_v(self._scf, x1_g, x2_g)
+                V = self._gxc_backend.contract_v(self._scf, x1, x2)
             else:
-                V = self._gxc_backend.contract_v(self._scf, x1_g + y1_g, x2_g + y2_g)
-
-            # Making explicit these quantities WILL NOT BE USED later.
-            # Instead, we will get XY aligned to MO orbital indexing
-            del x1_g, y1_g, x2_g, y2_g
+                V = self._gxc_backend.contract_v(self._scf, x1 + y1, x2 + y2)
 
         log.info('  Gxc done. Determining RHS of Casida eq.')
 
