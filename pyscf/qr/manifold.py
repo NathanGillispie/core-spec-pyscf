@@ -2,8 +2,8 @@
 
 These are essentially immutable Linear Response (LR) calculations with some metadata.
 (De-)excitation vectors follow the PySCF TDSCF convention: ``xy`` is a tuple of
-length ``nstates``, each element ``(x, y)`` where ``y`` is ``None`` for TDA and
-an ndarray for RPA.
+length ``nstates``, each element ``(x, y)`` where ``y`` is ``0`` or ``(0,0)``
+for TDA and numpy.ndarray for RPA.
 
 Each manifold carries ``mol`` and ``mo_coeff`` references shared with sibling
 manifolds in a QR calculation.  The mf object lives on the :class:`QR` driver only.
@@ -16,7 +16,6 @@ Example
 >>> manifold = Manifold.from_tdobj(td)
 >>> manifold.occ_idx   # active occupied MO indices in full MO basis
 >>> len(manifold.xy)   # 80
->>> manifold.xy[0][1] is not None  # RPA has Y amplitudes
 '''
 
 import json
@@ -46,53 +45,38 @@ def _active_occ_idx(mf, frozen):
     return numpy.intersect1d(occ_all, active, assume_unique=True)
 
 
-def _is_tda_y(y):
-    '''Return True when *y* carries no RPA de-excitation amplitudes.'''
-    if y is None:
-        return True
-    y = numpy.asarray(y)
-    return y.ndim == 0
-
-
-def _normalize_xy(pyscf_xy):
-    '''Convert PySCF ``tdobj.xy`` to an immutable tuple of ``(x, y)`` pairs.
-
-    TDA states store ``y=None`` (PySCF itself uses scalar ``0``).
-    '''
-    out = []
-    for x, y in pyscf_xy:
-        x = numpy.asarray(x)
-        if _is_tda_y(y):
-            out.append((x, None))
-        else:
-            out.append((x, numpy.asarray(y)))
-    return tuple(out)
-
-
 def _decode_xy(raw):
-    '''Restore ``xy`` from a checkpoint payload (tuple or legacy ndarray).'''
-    if isinstance(raw, list) and raw and isinstance(raw[0], (list, tuple)):
-        first = raw[0]
-        if len(first) == 2 and (first[1] is None or isinstance(first[1], list)):
-            return tuple(
-                (numpy.asarray(x), None if y is None else numpy.asarray(y))
-                for x, y in raw
-            )
+    '''Restore ``xy`` from a checkpoint payload.'''
+    assert isinstance(raw, list) and isinstance(raw[0], (list, tuple))
+    assert len(raw[0]) == 2
+    assert isinstance(raw[0][1], (list, tuple, int))
 
-    arr = numpy.asarray(raw)
-    if arr.ndim == 4 and arr.shape[1] == 2:
-        return tuple((arr[i, 0], arr[i, 1]) for i in range(arr.shape[0]))
-    if arr.ndim == 3:
-        return tuple((arr[i], None) for i in range(arr.shape[0]))
-    raise ValueError(f'cannot decode xy payload with shape {arr.shape}')
+    def _deserialize_y(z):
+        # RHF/GHF TDA
+        if z == 0:
+            return 0
+        if len(z) == 2:
+            # UHF TDA
+            if z[0] == 0 and z[1] == 0:
+                return (0, 0)
+        # RPA
+        return numpy.asarray(z)
+
+    return tuple((numpy.asarray(x), _deserialize_y(y)) for x, y in raw)
 
 
 def _encode_xy(xy):
     '''Serialize ``xy`` for JSON checkpoint storage.'''
-    return [
-        [x.tolist(), None if y is None else y.tolist()]
-        for x, y in xy
-    ]
+    def _serialize_y(z):
+        if type(z) == numpy.ndarray:
+            return z.tolist()
+        if type(z) == int:
+            return 0
+        if type(z) == tuple:
+            return 0
+        raise ValueError('Unknown type of y in manifold xy!')
+
+    return [[x.tolist(), _serialize_y(y)] for x, y in xy]
 
 
 @dataclass(frozen=True)
@@ -111,8 +95,8 @@ class Manifold:
         1D int array of active occupied MO indices in the full MO basis.
     e : ndarray
         Excitation energies in Hartree, shape ``(nstates,)``.
-    xy : tuple of (ndarray, ndarray or None)
-        PySCF-style amplitudes per state.  ``y is None`` for TDA.
+    xy : tuple of (ndarray, ndarray or int or tuple)
+        PySCF-style amplitudes per state.
     '''
 
     mol: object
@@ -127,21 +111,15 @@ class Manifold:
         object.__setattr__(self, 'mo_occ', numpy.asarray(self.mo_occ))
         object.__setattr__(self, 'occ_idx', numpy.asarray(self.occ_idx, dtype=int))
         object.__setattr__(self, 'e', numpy.asarray(self.e))
+        object.__setattr__(self, 'xy', self.xy)
 
-        xy = tuple(
-            (numpy.asarray(x), None if y is None else numpy.asarray(y))
-            for x, y in self.xy
-        )
-        object.__setattr__(self, 'xy', xy)
-
-        if len(xy) != len(self.e):
+        if len(self.xy) != len(self.e):
             raise ValueError(
-                f'len(xy)={len(xy)} does not match len(e)={len(self.e)}')
+                f'len(xy)={len(self.xy)} does not match len(e)={len(self.e)}')
 
-        has_y = {y is not None for x, y in xy}
+        has_y = {isinstance(y, numpy.ndarray) for x, y in self.xy}
         if len(has_y) != 1:
-            raise ValueError(
-                'all states in a manifold must be TDA or RPA')
+            raise ValueError('All states in a manifold must be TDA or RPA.')
 
     @classmethod
     def from_tdobj(cls, tdobj):
@@ -174,10 +152,9 @@ class Manifold:
             mo_occ=numpy.asarray(mf.mo_occ),
             occ_idx=occ_idx,
             e=numpy.asarray(tdobj.e),
-            xy=_normalize_xy(tdobj.xy),
+            xy=tdobj.xy,
         )
 
-    # TODO: VERIFY VERIFY VERIFY this function
     def get_aligned_xy(self, state):
         '''Pad compact TD amplitudes onto the full MO (occ, virt) basis.
 
@@ -195,7 +172,6 @@ class Manifold:
         x, y : ndarray
             Padded amplitudes with shape ``(nocc, nvirt)`` for the full MO
             basis.  Rows and columns outside the active LR subspace are zero.
-            ``y`` is None for TDA.
         '''
         if state < 0 or state >= len(self.e):
             raise IndexError(f'state={state} out of range for {len(self.e)} states')
@@ -212,7 +188,7 @@ class Manifold:
                 f'compact x has {ncol} virtual columns but mo_occ has '
                 f'only {nvirt_full} virtual orbitals')
         x_pad[row_pos, :ncol] = x
-        if y is not None:
+        if isinstance(y, numpy.ndarray):
             y_pad[row_pos, :ncol] = y
         return x_pad, y_pad
 
@@ -310,21 +286,3 @@ def check_shared_reference(tdobj_n, tdobj_m):
     if mf_n.mo_coeff is not mf_m.mo_coeff:
         raise ValueError('TDSCF objects must share the same mo_coeff object')
 
-
-def check_shared_manifolds(*manifolds):
-    '''Verify that manifolds share the same ``mol`` and ``mo_coeff`` objects.
-
-    Raises
-    ------
-    ValueError
-        If references differ.
-    '''
-    if len(manifolds) < 2:
-        return
-    mol = manifolds[0].mol
-    mo_coeff = manifolds[0].mo_coeff
-    for man in manifolds[1:]:
-        if man.mol is not mol:
-            raise ValueError('Manifolds must share the same mol object')
-        if man.mo_coeff is not mo_coeff:
-            raise ValueError('Manifolds must share the same mo_coeff object')

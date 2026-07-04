@@ -26,34 +26,16 @@ def test_public_exports():
     assert hasattr(pyscf.qr, 'GQR')
     assert hasattr(pyscf.qr, 'gxc_tensor_shape')
 
-
-@pytest.fixture
+@pytest.fixture(scope='module')
 def he_mf():
     mol = gto.M(atom='He 0 0 0', basis='6-31g', verbose=0)
     return scf.RHF(mol).run()
 
 
-@pytest.fixture
+@pytest.fixture(scope='module')
 def h2_mf():
     mol = gto.M(atom='H 0 0 0; H 0 0 0.74', basis='6-31g', verbose=0)
     return scf.RHF(mol).run()
-
-def test_manifold_loads_legacy_ndarray(he_mf):
-    legacy_rpa = json.dumps({
-        'occ_idx': [0],
-        'e': [0.1],
-        'xy': numpy.zeros((1, 2, 1, 1)).tolist(),
-    })
-    manifold = Manifold.loads(legacy_rpa, he_mf)
-    assert manifold.xy[0][1] is not None
-
-    legacy_tda = json.dumps({
-        'occ_idx': [0],
-        'e': [0.1],
-        'xy': numpy.zeros((1, 1, 1)).tolist(),
-    })
-    manifold = Manifold.loads(legacy_tda, he_mf)
-    assert manifold.xy[0][1] is None
 
 
 def test_qr_construction_from_tdobj(he_mf):
@@ -252,7 +234,6 @@ def test_manifold_dump_roundtrip(he_mf):
     s = manifold.dump()
     assert isinstance(s, str)
     payload = json.loads(s)
-    assert payload['xy'][0][1] is not None
     assert 'frozen_idx' not in payload
     assert 'mol' not in payload
     assert 'mo_coeff' not in payload
@@ -263,10 +244,7 @@ def test_manifold_dump_roundtrip(he_mf):
     assert len(restored.xy) == len(xy)
     for (x1, y1), (x2, y2) in zip(restored.xy, xy):
         numpy.testing.assert_array_equal(x1, x2)
-        if y1 is None:
-            assert y2 is None
-        else:
-            numpy.testing.assert_array_equal(y1, y2)
+        numpy.testing.assert_array_equal(y1, y2)
     assert restored.mol is he_mf.mol
     assert restored.mo_coeff is he_mf.mo_coeff
 
@@ -287,6 +265,6 @@ def test_manifold_from_tda_tdobj(he_mf):
     td = TDA(he_mf).set(nstates=1)
     td.kernel()
     manifold = Manifold.from_tdobj(td)
-    assert manifold.xy[0][1] is None
+    assert manifold.xy[0][1] == 0
 
 

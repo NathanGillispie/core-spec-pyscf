@@ -183,7 +183,11 @@ class QR(lib.StreamObject):
     @staticmethod
     def _infer_response_type(manifold):
         _, y0 = manifold.xy[0]
-        return 'tda' if y0 is None else 'rpa'
+        if isinstance(y0, (int, tuple)):
+            return 'tda'
+        if hasattr(y0, 'shape'):
+            return 'rpa'
+        raise ValueError('Could not infer response type from xy!')
 
     def _init_gxc(self):
         '''Hook for reference-specific Gxc backend setup.'''

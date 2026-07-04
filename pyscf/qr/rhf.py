@@ -128,7 +128,7 @@ def _get_2tdm_diag_block(x1, x2, y1, y2):
     '''Return 2TDM where off-diagonal blocks are 0.'''
     goo = -x1@x2.T
     gvv = x2.T@x1
-    if y1 is not None:
+    if isinstance(y1, numpy.ndarray):
         goo -= y2@y1.T
         gvv += y1.T@y2
     return block_diag(goo, gvv)
@@ -136,6 +136,7 @@ def _get_2tdm_diag_block(x1, x2, y1, y2):
 
 def _get_pq(C, Knm, V, x1, x2, y1, y2):
     '''Create |P,Q>: RHS of casida-like eq. for QR'''
+    is_tda = not isinstance(y1, numpy.ndarray)
     nocc, nvirt = C.shape[:2]
     oo = (slice(nocc),slice(nocc))
     vv = (slice(nocc,None),slice(nocc,None))
@@ -145,14 +146,14 @@ def _get_pq(C, Knm, V, x1, x2, y1, y2):
 
     Ha = numpy.einsum('iaqp,ia->pq', C, x1)
     Hb = numpy.einsum('iapq,ia->pq', C, x2)
-    if y1 is not None:
+    if not is_tda:
         Ha += numpy.einsum('iapq,ia->pq', C, y1)
         Hb += numpy.einsum('iaqp,ia->pq', C, y2)
 
     Pia += x2@Ha[vv].T - Ha[oo].T@x2
     Qia += x1@Hb[vv] - Hb[oo]@x1
 
-    if y1 is None:
+    if is_tda:
         return Pia, Qia
 
     Pia += y1@Hb[vv].T - Hb[oo].T@y1
