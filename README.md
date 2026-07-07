@@ -151,9 +151,12 @@ This should only be done if you know what you're doing. After [installing and bu
 ```sh
 pip install -e ./core-spec-pyscf
 ```
-Also, you can run my tests with `pytest`. However, precomputing does consume a lot of memory (at least 17GB is preferred).
 
 You can find details on other extensions in the [extensions](https://pyscf.org/user/extensions.html#how-to-install-extensions) page of the [PySCF website](https://pyscf.org).
+
+### Tests
+
+I use `pytests` for unit tests.
 
 ## TODO:
 - [ ] $\omega$-dependent Quadratic Response
@@ -164,7 +167,7 @@ You can find details on other extensions in the [extensions](https://pyscf.org/u
 - [x] Option to compute $g_\text{xc}$ at once or on-the-fly
 - [x] Frozen orbitals
 - [x] Checkpoints
-- [ ] Add check for `if precompute_gxc and G is None`.
+- [x] Add check for `if precompute_gxc and G is None`.
 
 [^1]: Cederbaum, L. S.; Domcke, W.; Schirmer, J. Many-Body Theory of Core Holes. _Phys. Rev. A_ **1980**, _22_ (1), 206–222. [doi.org/10.1103/PhysRevA.22.206](https://doi.org/10.1103/PhysRevA.22.206).
 

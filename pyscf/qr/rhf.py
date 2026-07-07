@@ -241,9 +241,9 @@ class Gxc:
 
     A single backend supports both evaluation strategies:
 
-    * **Eager** – when ``precompute`` is requested, a 6-index tensor of shape
-      ``(nocc, nvirt, nocc_n, nvirt_n, nocc_m, nvirt_m)`` is allocated at
-      construction and filled in place by :meth:`precompute`.  Each
+    * **Eager** – when ``precompute_gxc`` is requested, a 6-index tensor of shape
+      ``(nocc, nvirt, nocc_n, nvirt_n, nocc_m, nvirt_m)`` is allocated by
+      :meth:`precompute` and filled in place.  Each
       :meth:`contract_v` call is then a cheap tensor contraction.  The tensor
       is never written to checkpoint files.
     * **Lazy** – otherwise the grid work is repeated on every
@@ -257,29 +257,28 @@ class Gxc:
     required from excitation vectors before :meth:`contract_v`.
     '''
 
-    def __init__(self, qr, precompute=False):
+    def __init__(self, qr, precompute_gxc=False):
         self.occ_idx_n = numpy.asarray(qr._manifold_n.occ_idx)
         self.occ_idx_m = numpy.asarray(qr._manifold_m.occ_idx)
 
+        self.precompute_gxc = bool(precompute_gxc)
         self.G = None
-        if precompute:
+        if precompute_gxc:
             nvirt = int(numpy.count_nonzero(qr.mo_occ == 0))
-            shape = gxc_tensor_shape(
+            self._gxc_shape = gxc_tensor_shape(
                 qr._manifold_n, qr._manifold_m, nvirt)
-            self.G = numpy.zeros(shape)
-
-    @property
-    def precompute_gxc(self):
-        '''True when running in eager mode with an in-memory tensor.'''
-        return self.G is not None
+        else:
+            self._gxc_shape = None
 
     def precompute(self, mf):
         '''Fill the in-memory 6-index tensor (eager mode only).
 
-        No-op unless the backend was constructed with ``precompute=True``.
+        No-op unless the backend was constructed with ``precompute_gxc=True``.
         '''
-        if self.G is None:
+        if not self.precompute_gxc:
             return self
+        if self.G is None:
+            self.G = numpy.zeros(self._gxc_shape)
         _precompute_gxc(mf, self.G, self.occ_idx_n, self.occ_idx_m)
         return self
 
@@ -300,7 +299,11 @@ class Gxc:
         contraction from xy to grid space may be faster if xy was sliced. Since
         this contraction isn't the bottleneck, I'm not going to try to fix it.
         '''
-        if self.G is not None:
+        if self.precompute_gxc:
+            if self.G is None:
+                raise RuntimeError(
+                    'QR.kernel() must be called before contract_v when '
+                    'precompute_gxc=True')
             # Optimized for frozen orbitals
             xpy1_ = xpy1[self.occ_idx_n]
             xpy2_ = xpy2[self.occ_idx_m]
@@ -440,7 +443,7 @@ class RQR(QR):
     oscillator_strength = oscillator_strength
 
     def _init_gxc(self):
-        self._gxc_backend = Gxc(self, precompute=self.precompute_gxc)
+        self._gxc_backend = Gxc(self, precompute_gxc=self.precompute_gxc)
 
 
     def _build_intermediates(self):
@@ -455,7 +458,7 @@ class RQR(QR):
                  len(self._manifold_n.e), len(self._manifold_m.e))
         if self.precompute_gxc:
             log.info('QR kernel: precomputing Gxc (%s)',
-                     self._gxc_backend.G.shape)
+                     self._gxc_backend._gxc_shape)
             self._gxc_backend.precompute(self._scf)
         return self
 

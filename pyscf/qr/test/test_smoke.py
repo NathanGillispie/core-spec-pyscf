@@ -110,7 +110,19 @@ def test_eager_gxc_allocates_buffer(he_mf):
     qr = QR(td, precompute_gxc=True)
     assert isinstance(qr._gxc_backend, Gxc)
     assert qr._gxc_backend.precompute_gxc
+    assert qr._gxc_backend.G is None
+    qr.kernel()
     assert qr._gxc_backend.G is not None
+
+
+def test_contract_v_requires_kernel_when_precompute_gxc(he_mf):
+    td = RPA(he_mf).set(nstates=1)
+    td.kernel()
+    qr = QR(td, precompute_gxc=True)
+    _, (x1, y1) = qr.manifold_n(0)
+    _, (x2, y2) = qr.manifold_m(0)
+    with pytest.raises(RuntimeError, match=r'QR\.kernel\(\)'):
+        qr._gxc_backend.contract_v(qr.mf, x1 + y1, x2 + y2)
 
 
 def test_lazy_gxc_has_no_buffer(he_mf):
