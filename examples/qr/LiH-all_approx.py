@@ -5,8 +5,9 @@ Parker, S. M.; Roy, S.; Furche, F. Unphysical Divergences in Response Theory. J.
 Section III. B. LiH
 
 Comparing excitation energies + transition dipole moments
-RKS (PBE0 + def2-SVP) + TDDFT
+RKS TDDFT (PBE0 + def2-SVP)
 FCI (singlet def2-SVP)
+as bond length is stretched over a divergence in the quadratic response function.
 '''
 
 from functools import reduce
@@ -91,7 +92,7 @@ for BOND_LENGTH in bond_lengths:
     tdip = abs(tdip.dot(tdip)**.5)
     pw_tdip14.append(tdip)
 
-    # Xab Yab == 0 app.
+    # Xab Yab == 0 approximation
     qrobj.approximation = 'Nascimento'
     tdm14 = qrobj.get_2tdm(0, 3)
     tdip = qrobj.transition_dipole(tdm14)

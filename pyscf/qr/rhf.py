@@ -56,20 +56,7 @@ def _precompute_gxc(mf, G, occ_idx_n, occ_idx_m):
     mem_now = lib.current_memory()[-1]
     max_memory = max(2000, 40000*.9-mem_now)
     max_memory *= 30 # Experimental constant
-    max_elements = max_memory * 1024**2 / 8
-    max_npoints = max_elements / (nocc*nvir*nocc_n*nvir*nocc_m*nvir)
-    blksize = int((max_npoints // 56) * 56)
-    log.note('Gxc block size %d', blksize)
     mf.grids.build()
-    npoints = mf.grids.size
-    num_blocks = npoints//blksize +1
-    log.note('Num blocks: %d', num_blocks)
-
-    from time import perf_counter
-    start = perf_counter()
-    import tracemalloc
-    tracemalloc.start()
-    count=0
 
     if xctype=='LDA':
         ao_deriv = 0
@@ -88,15 +75,9 @@ def _precompute_gxc(mf, G, occ_idx_n, occ_idx_m):
             w_ovov = numpy.einsum('rjb,rkc->rjbkc', rho_man1_ov, w_ov, optimize=True)
             iajbkc = numpy.einsum('ria,rjbkc->iajbkc', rho_ov, w_ovov, optimize=True) * 4
             G += iajbkc
-
-            _, mem_peak = tracemalloc.get_traced_memory()
-            count += 1
-            log.note('Gxc iter %g/%g: mem peak %.3f GB in %.0f s', count, num_blocks, mem_peak/1024**3, perf_counter()-start)
-            start = perf_counter()
-            tracemalloc.reset_peak()
     elif xctype=='GGA':
         ao_deriv = 1
-        for ao, mask, weight, coords in ni.block_loop(mol, mf.grids, nao, ao_deriv, blksize=blksize):
+        for ao, mask, weight, coords in ni.block_loop(mol, mf.grids, nao, ao_deriv, max_memory//(nocc*nvir)):
             rho = make_rho(0, ao, mask, xctype)
             gxc = ni.eval_xc_eff(mf.xc, rho, deriv=3, xctype=xctype)[3]
 
@@ -112,12 +93,6 @@ def _precompute_gxc(mf, G, occ_idx_n, occ_idx_m):
             iajb = numpy.einsum('xria,xyrjb->yriajb', rho_man1_ov, w_ov, optimize=True)
             iajbkc = numpy.einsum('xria,xrjbkc->iajbkc', rho_ov, iajb, optimize=True) * 4
             G += iajbkc
-
-            _, mem_peak = tracemalloc.get_traced_memory()
-            count += 1
-            log.note('Gxc iter %g/%g: mem peak %.3f GB in %.0f s', count, num_blocks, mem_peak/1024**3, perf_counter()-start)
-            start = perf_counter()
-            tracemalloc.reset_peak()
     else:
         raise NotImplementedError(f'xctype = {xctype}')
 
@@ -388,9 +363,6 @@ class Gxc:
         elif xctype=='LDA':
             ao_deriv = 0
             for ao, mask, weight, coords in ni.block_loop(mol, mf.grids, nao, ao_deriv, max_memory):
-                lib.logger.warn(mf, 'Lazy Gxc contraction for LDA functionals: '
-                                    'running untested code!') # TODO: test this
-
                 rho = make_rho(0, ao, mask, xctype)
                 gxc = ni.eval_xc_eff(mf.xc, rho, deriv=3, xctype=xctype)[3]
 
