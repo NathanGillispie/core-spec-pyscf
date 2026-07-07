@@ -7,9 +7,124 @@ from pyscf import lib, scf
 from pyscf import ao2mo
 from pyscf.tdscf.rhf import _charge_center
 
+from pyscf.dft.gen_grid import BLKSIZE as _GRID_BLKSIZE
 from pyscf.qr.hf import QR
 from pyscf.qr.intermediates import CasidaIntermediates
 from pyscf.qr.manifold import gxc_tensor_shape
+
+# Upper bound on grid points per block (matches pyscf.dft.numint.block_loop).
+_GXC_MAX_BLKS = 1200
+# Empirical factor for short-lived einsum temporaries (see profiling notes).
+_GXC_EINSUM_OVERHEAD = 1.7
+
+
+def _gxc_blksize(max_memory_mb, mem_per_point, ngrids):
+    '''Number of grid points per block from a per-point memory budget.'''
+    budget = max_memory_mb * 1e6
+    blksize = int(budget / (8 * _GXC_EINSUM_OVERHEAD * mem_per_point))
+    blksize = max(_GRID_BLKSIZE,
+                  min(blksize, ngrids, _GXC_MAX_BLKS * _GRID_BLKSIZE))
+    return (blksize // _GRID_BLKSIZE) * _GRID_BLKSIZE
+
+
+def gxc_block_loop(ni, mol, grids, nao, deriv, max_memory_mb, mem_per_point):
+    '''Grid loop with block size sized for QR Gxc kernel intermediates.
+
+    Unlike :meth:`numint.NumInt.block_loop`, which budgets only for the AO
+    buffer, this sizes blocks from the dominant einsum arrays in the
+    precompute, lazy-contract, and C-matrix builders.
+    '''
+    if grids.coords is None:
+        grids.build(with_non0tab=True)
+    ngrids = grids.coords.shape[0]
+    blksize = _gxc_blksize(max_memory_mb, mem_per_point, ngrids)
+    yield from ni.block_loop(mol, grids, nao, deriv, blksize=blksize)
+
+
+def _mem_per_point_precompute_gxc(xctype, nao, nmo, nocc_n, nocc_m, nvir):
+    '''float64 elements per grid point for eager :func:`_precompute_gxc`.'''
+    if xctype == 'LDA':
+        return nao + nmo*nvir + nocc_n*nvir*nocc_m*nvir
+    if xctype == 'GGA':
+        return 4*nao + 4*nmo*nmo + 4*nocc_n*nvir*nocc_m*nvir + 4**3
+    raise NotImplementedError(f'xctype = {xctype}')
+
+
+def _mem_per_point_contract_v(xctype, nao, nmo, nocc, nvir):
+    '''float64 elements per grid point for lazy :meth:`Gxc.contract_v`.'''
+    if xctype == 'LDA':
+        return nao + nmo*nmo + nocc*nvir
+    if xctype == 'GGA':
+        return 4*nao + 20*nocc*nvir + 4**3
+    raise NotImplementedError(f'xctype = {xctype}')
+
+
+def _mem_per_point_compute_c(xctype, nao, nmo, nocc, nvir):
+    '''float64 elements per grid point for :func:`_compute_c`.'''
+    if xctype == 'LDA':
+        return nao + nmo*nmo + nocc*nvir
+    if xctype == 'GGA':
+        return 4*nao + 8*nmo*nmo + 4**3
+    raise NotImplementedError(f'xctype = {xctype}')
+
+
+def _gxc_max_memory(mf):
+    mem_now = lib.current_memory()[0]
+    return max(200, mf.max_memory * .8 - mem_now)
+
+
+def estimate_gxc_block_peak(mf, qr, *, eager=True):
+    '''Predict per-block peak memory (bytes) for the Gxc grid kernel.
+
+    Parameters
+    ----------
+    mf : SCF
+        Mean-field reference (must be Kohn-Sham DFT for a non-zero estimate).
+    qr : QR
+        Quadratic-response driver (manifold occ indices are read from the
+        backend).
+    eager : bool
+        If True, use the eager precompute kernel model; otherwise the lazy
+        :meth:`Gxc.contract_v` model.
+
+    Returns
+    -------
+    predicted_bytes : int
+        Estimated peak memory for the largest grid block.
+    info : dict
+        ``blksize``, ``mem_per_point``, ``ngrids``, ``max_memory_mb``,
+        ``xctype``.
+    '''
+    if not isinstance(mf, scf.hf.KohnShamDFT):
+        return 0, dict(blksize=0, mem_per_point=0, ngrids=0,
+                       max_memory_mb=0, xctype=None)
+
+    ni = mf._numint
+    xctype = ni._xc_type(mf.xc)
+    mo_occ = mf.mo_occ
+    nao = mf.mo_coeff.shape[0]
+    nocc = int(numpy.count_nonzero(mo_occ > 0))
+    nvir = int(numpy.count_nonzero(mo_occ == 0))
+    nmo = nocc + nvir
+    nocc_n = len(qr._gxc_backend.occ_idx_n)
+    nocc_m = len(qr._gxc_backend.occ_idx_m)
+
+    mf.grids.build()
+    ngrids = mf.grids.size
+    max_memory_mb = _gxc_max_memory(mf)
+
+    if eager:
+        mem_per_point = _mem_per_point_precompute_gxc(
+            xctype, nao, nmo, nocc_n, nocc_m, nvir)
+    else:
+        mem_per_point = _mem_per_point_contract_v(
+            xctype, nao, nmo, nocc, nvir)
+
+    blksize = _gxc_blksize(max_memory_mb, mem_per_point, ngrids)
+    predicted = int(blksize * 8 * _GXC_EINSUM_OVERHEAD * mem_per_point)
+    info = dict(blksize=blksize, mem_per_point=mem_per_point, ngrids=ngrids,
+                max_memory_mb=max_memory_mb, xctype=xctype)
+    return predicted, info
 
 
 def _precompute_gxc(mf, G, occ_idx_n, occ_idx_m):
@@ -53,17 +168,15 @@ def _precompute_gxc(mf, G, occ_idx_n, occ_idx_m):
     dm0 = mf.make_rdm1(mo_coeff, mo_occ)
     make_rho = ni._gen_rho_evaluator(mol, dm0, hermi=1, with_lapl=False)[0]
 
-    mem_now = lib.current_memory()[-1]
-    max_memory = max(2000, 40000*.9-mem_now)
-    max_memory *= 30 # Experimental constant
-    max_elements = max_memory * 1024**2 / 8
-    max_npoints = max_elements / (nocc*nvir*nocc_n*nvir*nocc_m*nvir)
-    blksize = int((max_npoints // 56) * 56)
-    log.note('Gxc block size %d', blksize)
+    max_memory = _gxc_max_memory(mf)
+    mem_per_point = _mem_per_point_precompute_gxc(
+        xctype, nao, nmo, nocc_n, nocc_m, nvir)
     mf.grids.build()
     npoints = mf.grids.size
-    num_blocks = npoints//blksize +1
-    log.note('Num blocks: %d', num_blocks)
+    blksize = _gxc_blksize(max_memory, mem_per_point, npoints)
+    num_blocks = (npoints + blksize - 1) // blksize
+    log.note('Gxc blksize %d (%d blocks, max_memory %d MB)',
+             blksize, num_blocks, int(max_memory))
 
     from time import perf_counter
     start = perf_counter()
@@ -73,7 +186,8 @@ def _precompute_gxc(mf, G, occ_idx_n, occ_idx_m):
 
     if xctype=='LDA':
         ao_deriv = 0
-        for ao, mask, weight, coords in ni.block_loop(mol, mf.grids, nao, ao_deriv, max_memory//(nocc*nvir)):
+        for ao, mask, weight, coords in gxc_block_loop(
+                ni, mol, mf.grids, nao, ao_deriv, max_memory, mem_per_point):
             rho = make_rho(0, ao, mask, xctype)
             gxc = ni.eval_xc_eff(mf.xc, rho, deriv=3, xctype=xctype)[3]
 
@@ -96,7 +210,8 @@ def _precompute_gxc(mf, G, occ_idx_n, occ_idx_m):
             tracemalloc.reset_peak()
     elif xctype=='GGA':
         ao_deriv = 1
-        for ao, mask, weight, coords in ni.block_loop(mol, mf.grids, nao, ao_deriv, blksize=blksize):
+        for ao, mask, weight, coords in gxc_block_loop(
+                ni, mol, mf.grids, nao, ao_deriv, max_memory, mem_per_point):
             rho = make_rho(0, ao, mask, xctype)
             gxc = ni.eval_xc_eff(mf.xc, rho, deriv=3, xctype=xctype)[3]
 
@@ -210,13 +325,13 @@ def _compute_c(mf):
 
     dm0 = mf.make_rdm1(mo_coeff, mo_occ)
     make_rho = ni._gen_rho_evaluator(mol, dm0, hermi=1, with_lapl=False)[0]
-    mem_now = lib.current_memory()[0]
-    ## TODO: update memory usage
-    max_memory = max(2000, mf.max_memory*.8-mem_now)
+    max_memory = _gxc_max_memory(mf)
+    mem_per_point = _mem_per_point_compute_c(xctype, nao, nmo, nocc, nvir)
 
     if xctype=='GGA':
         ao_deriv = 1
-        for ao, mask, weight, coords in ni.block_loop(mol, mf.grids, nao, ao_deriv, max_memory):
+        for ao, mask, weight, coords in gxc_block_loop(
+                ni, mol, mf.grids, nao, ao_deriv, max_memory, mem_per_point):
             rho = make_rho(0, ao, mask, xctype)
 
             fxc = ni.eval_xc_eff(mf.xc, rho, deriv=2, xctype=xctype)[2]
@@ -233,7 +348,8 @@ def _compute_c(mf):
             C += iapq
     elif xctype=='LDA':
         ao_deriv = 0
-        for ao, mask, weight, coords in ni.block_loop(mol, mf.grids, nao, ao_deriv, max_memory):
+        for ao, mask, weight, coords in gxc_block_loop(
+                ni, mol, mf.grids, nao, ao_deriv, max_memory, mem_per_point):
             rho = make_rho(0, ao, mask, xctype)
             fxc = ni.eval_xc_eff(mf.xc, rho, deriv=2, xctype=xctype)[2]
             wfxc = fxc[0,0] * weight
@@ -359,12 +475,13 @@ class Gxc:
 
         dm0 = mf.make_rdm1(mo_coeff, mo_occ)
         make_rho = ni._gen_rho_evaluator(mol, dm0, hermi=1, with_lapl=False)[0]
-        mem_now = lib.current_memory()[0]
-        max_memory = max(2000, mf.max_memory*.8-mem_now)
+        max_memory = _gxc_max_memory(mf)
+        mem_per_point = _mem_per_point_contract_v(xctype, nao, nmo, nocc, nvir)
 
         if xctype=='GGA':
             ao_deriv = 1
-            for ao, mask, weight, coords in ni.block_loop(mol, mf.grids, nao, ao_deriv, max_memory):
+            for ao, mask, weight, coords in gxc_block_loop(
+                    ni, mol, mf.grids, nao, ao_deriv, max_memory, mem_per_point):
                 rho = make_rho(0, ao, mask, xctype)
                 gxc = ni.eval_xc_eff(mf.xc, rho, deriv=3, xctype=xctype)[3]
 
@@ -387,7 +504,8 @@ class Gxc:
                 G += iajbkc
         elif xctype=='LDA':
             ao_deriv = 0
-            for ao, mask, weight, coords in ni.block_loop(mol, mf.grids, nao, ao_deriv, max_memory):
+            for ao, mask, weight, coords in gxc_block_loop(
+                    ni, mol, mf.grids, nao, ao_deriv, max_memory, mem_per_point):
                 lib.logger.warn(mf, 'Lazy Gxc contraction for LDA functionals: '
                                     'running untested code!') # TODO: test this
 

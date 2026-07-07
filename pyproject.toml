@@ -33,3 +33,7 @@ classifiers = [
 Homepage = "https://github.com/NathanGillispie/core-spec-pyscf"
 Issues = "https://github.com/NathanGillispie/core-spec-pyscf/issues"
 
+[tool.pytest.ini_options]
+markers = [
+    "slow: long-running benchmark or integration tests",
+]
