@@ -76,8 +76,12 @@ class ZORAHelper(lib.StreamObject):
 
     _keys = {'mol', 'spin_orbit', 'grid_level', 'grids', 'max_memory'}
 
-    def __init__(self, mol, spin_orbit=False, grid_level=DEFAULT_GRID_LEVEL,
-                 grid=None, max_memory=None):
+    def __init__(self,
+                 mol,
+                 spin_orbit=False,
+                 grid_level=DEFAULT_GRID_LEVEL,
+                 grid=None,
+                 max_memory=None):
         self.mol = mol
         self.stdout = mol.stdout
         self.verbose = mol.verbose
@@ -127,8 +131,10 @@ class ZORAHelper(lib.StreamObject):
         veff = integrals.eval_model_potential(mol, grid.coords)
         kernel = integrals.zora_kernel(veff)
         max_memory = integrals.max_memory_mb(self)
-        T, eps_scal_ao = integrals.eval_zora_T_and_eps(
-            mol, grid, kernel, max_memory=max_memory)
+        T, eps_scal_ao = integrals.eval_zora_T_and_eps(mol,
+                                                       grid,
+                                                       kernel,
+                                                       max_memory=max_memory)
         hcore = T + mol.intor('int1e_nuc')
         self._hcore = hcore
         self._eps_scal_ao = eps_scal_ao
@@ -141,8 +147,10 @@ class ZORAHelper(lib.StreamObject):
 
         log = logger.new_logger(self)
         log.note('Computing MP-ZORA spin-orbit Hamiltonian')
-        Hx, Hy, Hz = integrals.eval_zora_SO(
-            mol, grid, kernel * veff / 2., max_memory=max_memory)
+        Hx, Hy, Hz = integrals.eval_zora_SO(mol,
+                                            grid,
+                                            kernel * veff / 2.,
+                                            max_memory=max_memory)
         self._hso = integrals.assemble_Hso(Hx, Hy, Hz)
 
     def get_hcore(self, mol=None):
@@ -177,12 +185,17 @@ class ZORA_SCF:
 
     _keys = {'with_zora'}
 
-    def __init__(self, mf, spin_orbit=False, grid_level=DEFAULT_GRID_LEVEL,
+    def __init__(self,
+                 mf,
+                 spin_orbit=False,
+                 grid_level=DEFAULT_GRID_LEVEL,
                  grid=None):
         self.__dict__.update(mf.__dict__)
-        self.with_zora = ZORAHelper(
-            mf.mol, spin_orbit=spin_orbit, grid_level=grid_level, grid=grid,
-            max_memory=mf.max_memory)
+        self.with_zora = ZORAHelper(mf.mol,
+                                    spin_orbit=spin_orbit,
+                                    grid_level=grid_level,
+                                    grid=grid,
+                                    max_memory=mf.max_memory)
 
     def undo_zora(self):
         '''Remove the ZORA mixin.'''
@@ -220,10 +233,11 @@ class ZORA_SCF:
 
     def _transfer_attrs_(self, dst):
         if self.with_zora and not hasattr(dst, 'with_zora'):
-            logger.warn(self, 'Destination object of to_hf/to_ks is not a '
-                        'ZORA object. Convert dst to ZORA.')
+            logger.warn(
+                self, 'Destination object of to_hf/to_ks is not a '
+                'ZORA object. Convert dst to ZORA.')
             dst = dst.zora(spin_orbit=self.with_zora.spin_orbit,
-                            grid_level=self.with_zora.grid_level)
+                           grid_level=self.with_zora.grid_level)
         return hf.SCF._transfer_attrs_(self, dst)
 
 

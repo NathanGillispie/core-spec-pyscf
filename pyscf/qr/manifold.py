@@ -67,6 +67,7 @@ def _decode_xy(raw):
 
 def _encode_xy(xy):
     '''Serialize ``xy`` for JSON checkpoint storage.'''
+
     def _serialize_y(z):
         if type(z) == numpy.ndarray:
             return z.tolist()
@@ -109,7 +110,8 @@ class Manifold:
     def __post_init__(self):
         object.__setattr__(self, 'mo_coeff', numpy.asarray(self.mo_coeff))
         object.__setattr__(self, 'mo_occ', numpy.asarray(self.mo_occ))
-        object.__setattr__(self, 'occ_idx', numpy.asarray(self.occ_idx, dtype=int))
+        object.__setattr__(self, 'occ_idx',
+                           numpy.asarray(self.occ_idx, dtype=int))
         object.__setattr__(self, 'e', numpy.asarray(self.e))
         object.__setattr__(self, 'xy', self.xy)
 
@@ -174,7 +176,8 @@ class Manifold:
             basis.  Rows and columns outside the active LR subspace are zero.
         '''
         if state < 0 or state >= len(self.e):
-            raise IndexError(f'state={state} out of range for {len(self.e)} states')
+            raise IndexError(
+                f'state={state} out of range for {len(self.e)} states')
         x, y = self.xy[state]
         mo_occ = self.mo_occ
         occ_full = numpy.where(mo_occ > 0)[0]
@@ -208,7 +211,8 @@ class Manifold:
             ``(x, y)`` padded onto the full MO basis (see :meth:`get_aligned_xy`).
         '''
         if state < 0 or state >= len(self.e):
-            raise IndexError(f'state={state} out of range for {len(self.e)} states')
+            raise IndexError(
+                f'state={state} out of range for {len(self.e)} states')
         return float(self.e[state]), self.get_aligned_xy(state)
 
     def dump(self):
@@ -285,4 +289,3 @@ def check_shared_reference(tdobj_n, tdobj_m):
         raise ValueError('TDSCF objects must share the same mol object')
     if mf_n.mo_coeff is not mf_m.mo_coeff:
         raise ValueError('TDSCF objects must share the same mo_coeff object')
-

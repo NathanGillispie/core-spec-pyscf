@@ -25,7 +25,9 @@ def test_energy_slow():
 
 
 def test_energy2():
-    mol = pyscf.M(atom='H 0 0 0; H 1 0 0; H 2 0 0; H 3 0 0', basis='6-31g', cart=True)
+    mol = pyscf.M(atom='H 0 0 0; H 1 0 0; H 2 0 0; H 3 0 0',
+                  basis='6-31g',
+                  cart=True)
     mf = pyscf.scf.RHF(mol)
     e1 = mf.kernel()
     mf = mf.zora()

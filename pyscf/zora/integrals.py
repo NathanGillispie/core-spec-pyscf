@@ -47,7 +47,11 @@ def block_loop(mol, grids, kernel, deriv=0, max_memory=2000):
         coords = grids.coords[ip0:ip1]
         weight = grids.weights[ip0:ip1]
         kern = kernel[ip0:ip1]
-        ao = dft.numint.eval_ao(mol, coords, deriv=deriv, cutoff=grids.cutoff, out=buf)
+        ao = dft.numint.eval_ao(mol,
+                                coords,
+                                deriv=deriv,
+                                cutoff=grids.cutoff,
+                                out=buf)
         yield ao, weight, kern
 
 
@@ -138,14 +142,21 @@ def eval_zora_T(mol, grid, kernel, deriv_bra=False, max_memory=2000):
     T = numpy.zeros((nao, nao))
     ipkin = numpy.zeros((3, nao, nao)) if deriv_bra else None
     ao_deriv = 2 if deriv_bra else 1
-    for ao, weights, kern in block_loop(mol, grid, kernel, deriv=ao_deriv,
-                                         max_memory=max_memory):
+    for ao, weights, kern in block_loop(mol,
+                                        grid,
+                                        kernel,
+                                        deriv=ao_deriv,
+                                        max_memory=max_memory):
         wK = weights * kern
-        T += numpy.einsum('xip,xiq,i->pq', ao[1:4], ao[1:4], wK, optimize=True) * C2
+        T += numpy.einsum('xip,xiq,i->pq', ao[1:4], ao[1:4], wK,
+                          optimize=True) * C2
         if deriv_bra:
-            ipkin += numpy.einsum('xip,iq,i->xpq', ao[[4, 5, 6]], ao[1], wK, optimize=True) * C2
-            ipkin += numpy.einsum('xip,iq,i->xpq', ao[[5, 7, 8]], ao[2], wK, optimize=True) * C2
-            ipkin += numpy.einsum('xip,iq,i->xpq', ao[[6, 8, 9]], ao[3], wK, optimize=True) * C2
+            ipkin += numpy.einsum(
+                'xip,iq,i->xpq', ao[[4, 5, 6]], ao[1], wK, optimize=True) * C2
+            ipkin += numpy.einsum(
+                'xip,iq,i->xpq', ao[[5, 7, 8]], ao[2], wK, optimize=True) * C2
+            ipkin += numpy.einsum(
+                'xip,iq,i->xpq', ao[[6, 8, 9]], ao[3], wK, optimize=True) * C2
     return T, ipkin
 
 
@@ -155,12 +166,19 @@ def eval_zora_T_and_eps(mol, grid, kernel, max_memory=2000):
     nao = mol.nao
     T = numpy.zeros((nao, nao))
     eps_scal_ao = numpy.zeros((nao, nao))
-    for ao, weights, kern in block_loop(mol, grid, kernel, deriv=1,
-                                         max_memory=max_memory):
+    for ao, weights, kern in block_loop(mol,
+                                        grid,
+                                        kernel,
+                                        deriv=1,
+                                        max_memory=max_memory):
         wK = weights * kern
-        T += numpy.einsum('xip,xiq,i->pq', ao[1:4], ao[1:4], wK, optimize=True) * C2
-        eps_scal_ao += numpy.einsum('xip,xiq,i->pq', ao[1:4], ao[1:4],
-                                   weights * (kern**2), optimize=True) * C2
+        T += numpy.einsum('xip,xiq,i->pq', ao[1:4], ao[1:4], wK,
+                          optimize=True) * C2
+        eps_scal_ao += numpy.einsum('xip,xiq,i->pq',
+                                    ao[1:4],
+                                    ao[1:4],
+                                    weights * (kern**2),
+                                    optimize=True) * C2
     return T, eps_scal_ao
 
 
@@ -177,11 +195,15 @@ def eval_zora_T_kernel_deriv(mol, grid, kernel, max_memory=2000, dveff=None):
 
     dT = numpy.zeros((mol.natm, 3, mol.nao, mol.nao))
     ip0 = 0
-    for ao, weights, kern in block_loop(mol, grid, kernel, deriv=1,
-                                         max_memory=max_memory):
+    for ao, weights, kern in block_loop(mol,
+                                        grid,
+                                        kernel,
+                                        deriv=1,
+                                        max_memory=max_memory):
         ip1 = ip0 + weights.shape[0]
         fac = dveff[:, :, ip0:ip1] * (weights * kern**2)
-        dT += numpy.einsum('xip,xiq,ayi->aypq', ao[1:4], ao[1:4], fac, optimize=True) * C2
+        dT += numpy.einsum(
+            'xip,xiq,ayi->aypq', ao[1:4], ao[1:4], fac, optimize=True) * C2
         ip0 = ip1
     dT = 0.5 * (dT + dT.transpose(0, 1, 3, 2))
     return dT
@@ -203,11 +225,18 @@ def eval_zora_SO(mol, grid, kappa, max_memory=2000):
     '''Real antisymmetric Hx, Hy, Hz matching the energy-level SO integrals.'''
     nao = mol.nao
     t = numpy.zeros((3, nao, nao))
-    for ao, weights, kern in block_loop(mol, grid, kappa, deriv=1,
-                                         max_memory=max_memory):
+    for ao, weights, kern in block_loop(mol,
+                                        grid,
+                                        kappa,
+                                        deriv=1,
+                                        max_memory=max_memory):
         wK = weights * kern
         for k, (i, j) in enumerate(_SO_PAIRS):
-            t[k] += numpy.einsum('ip,iq,i->pq', ao[i], ao[j], wK, optimize=True)
+            t[k] += numpy.einsum('ip,iq,i->pq',
+                                 ao[i],
+                                 ao[j],
+                                 wK,
+                                 optimize=True)
     Hx = t[0] - t[0].T
     Hy = t[1] - t[1].T
     Hz = t[2] - t[2].T
@@ -234,20 +263,32 @@ def eval_zora_SO_grad(mol, grid, kernel, veff, max_memory=2000, dveff=None):
     ip_ket = numpy.zeros((3, 3, nao, nao))
     dt = numpy.zeros((3, natm, 3, nao, nao))
     ip0 = 0
-    for ao, weights, kap in block_loop(mol, grid, kappa, deriv=2,
-                                         max_memory=max_memory):
+    for ao, weights, kap in block_loop(mol,
+                                       grid,
+                                       kappa,
+                                       deriv=2,
+                                       max_memory=max_memory):
         ip1 = ip0 + weights.shape[0]
         wK = weights * kap
         dkap = dveff[:, :, ip0:ip1] * (weights * kernel[ip0:ip1]**2 * C2)
         for k, (i, j) in enumerate(_SO_PAIRS):
             hess_i = ao[list(_HESS_NABLA[i - 1])]
             hess_j = ao[list(_HESS_NABLA[j - 1])]
-            ip_bra[k] += numpy.einsum('xip,iq,i->xpq', hess_i, ao[j], wK,
-                                     optimize=True)
-            ip_ket[k] += numpy.einsum('ip,xiq,i->xpq', ao[i], hess_j, wK,
-                                     optimize=True)
-            dt[k] += numpy.einsum('ip,iq,ayi->aypq', ao[i], ao[j], dkap,
-                                 optimize=True)
+            ip_bra[k] += numpy.einsum('xip,iq,i->xpq',
+                                      hess_i,
+                                      ao[j],
+                                      wK,
+                                      optimize=True)
+            ip_ket[k] += numpy.einsum('ip,xiq,i->xpq',
+                                      ao[i],
+                                      hess_j,
+                                      wK,
+                                      optimize=True)
+            dt[k] += numpy.einsum('ip,iq,ayi->aypq',
+                                  ao[i],
+                                  ao[j],
+                                  dkap,
+                                  optimize=True)
         ip0 = ip1
 
     dHcart = numpy.empty((3, natm, 3, nao, nao))

@@ -23,8 +23,8 @@ import pyscf.dft
 import pyscf.tdscf
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-_REF_DIR = os.path.normpath(os.path.join(
-    _HERE, '..', '..', '..', 'reference', 'on-the-fly'))
+_REF_DIR = os.path.normpath(
+    os.path.join(_HERE, '..', '..', '..', 'reference', 'on-the-fly'))
 _OUT = os.path.join(_HERE, 'lih_ref_intermediates.npz')
 
 _PAIRS = [(0, 3), (0, 1), (1, 3), (2, 3)]

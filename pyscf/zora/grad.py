@@ -38,8 +38,11 @@ def nuc_grad_hcore(mol, grid=None, kernel=None, max_memory=None):
     if max_memory is None:
         max_memory = integrals.max_memory_mb(mol)
 
-    _, ipkin = integrals.eval_zora_T(
-        mol, grid, kernel, deriv_bra=True, max_memory=max_memory)
+    _, ipkin = integrals.eval_zora_T(mol,
+                                     grid,
+                                     kernel,
+                                     deriv_bra=True,
+                                     max_memory=max_memory)
     if mol._pseudo:
         raise NotImplementedError('Nuclear gradients for GTH PP')
     ipkin = ipkin + mol.intor('int1e_ipnuc', comp=3)
@@ -70,12 +73,19 @@ def hcore_grad_generator(zoraobj, mol=None):
     dveff = integrals.eval_dveff_all(mol, grid.coords)
     max_memory = integrals.max_memory_mb(zoraobj)
     h1 = nuc_grad_hcore(mol, grid=grid, kernel=kernel, max_memory=max_memory)
-    dT = integrals.eval_zora_T_kernel_deriv(
-        mol, grid, kernel, max_memory=max_memory, dveff=dveff)
+    dT = integrals.eval_zora_T_kernel_deriv(mol,
+                                            grid,
+                                            kernel,
+                                            max_memory=max_memory,
+                                            dveff=dveff)
 
     if zoraobj.spin_orbit:
-        zoraobj._dHso = integrals.eval_zora_SO_grad(
-            mol, grid, kernel, veff, max_memory=max_memory, dveff=dveff)
+        zoraobj._dHso = integrals.eval_zora_SO_grad(mol,
+                                                    grid,
+                                                    kernel,
+                                                    veff,
+                                                    max_memory=max_memory,
+                                                    dveff=dveff)
     else:
         zoraobj._dHso = None
 
@@ -88,6 +98,7 @@ def hcore_grad_generator(zoraobj, mol=None):
                 vrinv += mol.intor('ECPscalar_iprinv', comp=3)
         vrinv[:, p0:p1] += h1[:, p0:p1]
         return vrinv + vrinv.transpose(0, 2, 1) + dT[atm_id]
+
     return hcore_deriv
 
 

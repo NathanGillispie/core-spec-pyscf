@@ -4,8 +4,15 @@ import numpy as np
 import pyscf
 import pyscf.zora
 from pyscf.zora.test.common import (
-    GRAD_GRID_LEVEL, make_ghf, make_gks, make_hf_mol, make_rhf, make_rks,
-    make_rohf, make_uhf, make_uks,
+    GRAD_GRID_LEVEL,
+    make_ghf,
+    make_gks,
+    make_hf_mol,
+    make_rhf,
+    make_rks,
+    make_rohf,
+    make_uhf,
+    make_uks,
 )
 
 

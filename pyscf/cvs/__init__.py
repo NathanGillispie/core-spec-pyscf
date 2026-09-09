@@ -22,4 +22,3 @@ For UHF/UKS objects, specify tuples
 from pyscf.cvs import rhf
 from pyscf.cvs import uhf
 from pyscf.cvs import ghf
-

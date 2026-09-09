@@ -30,8 +30,8 @@ def _precompute_gxc(mf, G, occ_idx_n, occ_idx_m):
     assert mo_coeff.dtype == numpy.float64
 
     nao = mo_coeff.shape[0]
-    occidx = numpy.where(mo_occ>0)[0]
-    viridx = numpy.where(mo_occ==0)[0]
+    occidx = numpy.where(mo_occ > 0)[0]
+    viridx = numpy.where(mo_occ == 0)[0]
     nocc = len(occidx)
     nvir = len(viridx)
 
@@ -42,7 +42,7 @@ def _precompute_gxc(mf, G, occ_idx_n, occ_idx_m):
     nocc_n = len(occ_idx_n)
     nocc_m = len(occ_idx_m)
 
-    assert G.shape == (nocc,nvir,nocc_n,nvir,nocc_m,nvir)
+    assert G.shape == (nocc, nvir, nocc_n, nvir, nocc_m, nvir)
 
     # fxc contribution
     ni = mf._numint
@@ -54,58 +54,62 @@ def _precompute_gxc(mf, G, occ_idx_n, occ_idx_m):
     make_rho = ni._gen_rho_evaluator(mol, dm0, hermi=1, with_lapl=False)[0]
 
     mem_now = lib.current_memory()[-1]
-    max_memory = max(2000, 40000*.9-mem_now)
-    max_memory *= 30 # Experimental constant
+    max_memory = max(2000, 40000 * .9 - mem_now)
+    max_memory *= 30  # Experimental constant
     mf.grids.build()
 
-    if xctype=='LDA':
+    # yapf: disable
+    if xctype == 'LDA':
         ao_deriv = 0
-        for ao, mask, weight, coords in ni.block_loop(mol, mf.grids, nao, ao_deriv, max_memory//(nocc*nvir)):
+        for ao, mask, weight, coords in ni.block_loop(
+                mol, mf.grids, nao, ao_deriv, max_memory // (nocc * nvir)):
             rho = make_rho(0, ao, mask, xctype)
             gxc = ni.eval_xc_eff(mf.xc, rho, deriv=3, xctype=xctype)[3]
 
             rho = numpy.einsum('rp,pi->ri', ao, mo_coeff)
-            rho_xv = numpy.einsum('rp,rq->rpq', rho, rho[:,viridx])
-            rho_ov = rho_xv[:,occidx]
-            rho_man1_ov = rho_xv[:,occ_idx_n]
-            rho_man2_ov = rho_xv[:,occ_idx_m]
+            rho_xv = numpy.einsum('rp,rq->rpq', rho, rho[:, viridx])
+            rho_ov = rho_xv[:, occidx]
+            rho_man1_ov = rho_xv[:, occ_idx_n]
+            rho_man2_ov = rho_xv[:, occ_idx_m]
 
-            wgxc = gxc[0,0,0] * weight
+            wgxc = gxc[0, 0, 0] * weight
             w_ov = numpy.einsum('rkc,r->rkc', rho_man2_ov, wgxc, optimize=True)
             w_ovov = numpy.einsum('rjb,rkc->rjbkc', rho_man1_ov, w_ov, optimize=True)
-            iajbkc = numpy.einsum('ria,rjbkc->iajbkc', rho_ov, w_ovov, optimize=True) * 4
+            iajbkc = numpy.einsum( 'ria,rjbkc->iajbkc', rho_ov, w_ovov, optimize=True) * 4
             G += iajbkc
-    elif xctype=='GGA':
+    elif xctype == 'GGA':
         ao_deriv = 1
-        for ao, mask, weight, coords in ni.block_loop(mol, mf.grids, nao, ao_deriv, max_memory//(nocc*nvir)):
+        for ao, mask, weight, coords in ni.block_loop(
+                mol, mf.grids, nao, ao_deriv, max_memory // (nocc * nvir)):
             rho = make_rho(0, ao, mask, xctype)
             gxc = ni.eval_xc_eff(mf.xc, rho, deriv=3, xctype=xctype)[3]
 
             rho = numpy.einsum('xrp,pi->xri', ao, mo_coeff)
             rho_xx = numpy.einsum('xrp,rq->xrpq', rho, rho[0])
             rho_xx[1:4] += numpy.einsum('rp,xrq->xrpq', rho[0], rho[1:4])
-            rho_ov = rho_xx[:,:,occidx[:, None],viridx]
-            rho_man1_ov = rho_xx[:,:,occ_idx_n[:, None],viridx]
-            rho_man2_ov = rho_xx[:,:,occ_idx_m[:, None],viridx]
+            rho_ov = rho_xx[:, :, occidx[:, None], viridx]
+            rho_man1_ov = rho_xx[:, :, occ_idx_n[:, None], viridx]
+            rho_man2_ov = rho_xx[:, :, occ_idx_m[:, None], viridx]
 
             wgxc = gxc * weight
             w_ov = numpy.einsum('xria,xyzr->yzria', rho_man2_ov, wgxc, optimize=True)
             iajb = numpy.einsum('xria,xyrjb->yriajb', rho_man1_ov, w_ov, optimize=True)
-            iajbkc = numpy.einsum('xria,xrjbkc->iajbkc', rho_ov, iajb, optimize=True) * 4
+            iajbkc = numpy.einsum( 'xria,xrjbkc->iajbkc', rho_ov, iajb, optimize=True) * 4
             G += iajbkc
     else:
         raise NotImplementedError(f'xctype = {xctype}')
+    # yapf: enable
 
     return G
 
 
 def _get_2tdm_diag_block(x1, x2, y1, y2):
     '''Return 2TDM where off-diagonal blocks are 0.'''
-    goo = -x1@x2.T
-    gvv = x2.T@x1
+    goo = -x1 @ x2.T
+    gvv = x2.T @ x1
     if isinstance(y1, numpy.ndarray):
-        goo -= y2@y1.T
-        gvv += y1.T@y2
+        goo -= y2 @ y1.T
+        gvv += y1.T @ y2
     return block_diag(goo, gvv)
 
 
@@ -113,8 +117,8 @@ def _get_pq(C, Knm, V, x1, x2, y1, y2):
     '''Create |P,Q>: RHS of casida-like eq. for QR'''
     is_tda = not isinstance(y1, numpy.ndarray)
     nocc, nvirt = C.shape[:2]
-    oo = (slice(nocc),slice(nocc))
-    vv = (slice(nocc,None),slice(nocc,None))
+    oo = (slice(nocc), slice(nocc))
+    vv = (slice(nocc, None), slice(nocc, None))
 
     Pia = numpy.einsum('iapq,pq->ia', C, Knm) + V
     Qia = numpy.einsum('iapq,pq->ia', C, Knm.T) + V
@@ -125,14 +129,14 @@ def _get_pq(C, Knm, V, x1, x2, y1, y2):
         Ha += numpy.einsum('iapq,ia->pq', C, y1)
         Hb += numpy.einsum('iaqp,ia->pq', C, y2)
 
-    Pia += x2@Ha[vv].T - Ha[oo].T@x2
-    Qia += x1@Hb[vv] - Hb[oo]@x1
+    Pia += x2 @ Ha[vv].T - Ha[oo].T @ x2
+    Qia += x1 @ Hb[vv] - Hb[oo] @ x1
 
     if is_tda:
         return Pia, Qia
 
-    Pia += y1@Hb[vv].T - Hb[oo].T@y1
-    Qia += y2@Ha[vv] - Ha[oo]@y2
+    Pia += y1 @ Hb[vv].T - Hb[oo].T @ y1
+    Qia += y2 @ Ha[vv] - Ha[oo] @ y2
     return Pia, Qia
 
 
@@ -150,21 +154,21 @@ def _compute_c(mf):
     mol = mf.mol
 
     nao, nmo = mo_coeff.shape
-    occidx = numpy.where(mo_occ==2)[0]
-    viridx = numpy.where(mo_occ==0)[0]
-    orbv = mo_coeff[:,viridx]
-    orbo = mo_coeff[:,occidx]
+    occidx = numpy.where(mo_occ == 2)[0]
+    viridx = numpy.where(mo_occ == 0)[0]
+    orbv = mo_coeff[:, viridx]
+    orbo = mo_coeff[:, occidx]
     nvir = orbv.shape[1]
     nocc = orbo.shape[1]
-    mo = numpy.hstack((orbo,orbv))
+    mo = numpy.hstack((orbo, orbv))
 
-    C = numpy.zeros((nocc,nvir,nmo,nmo))
+    C = numpy.zeros((nocc, nvir, nmo, nmo))
 
     def add_hf_(c1, hyb=1):
-        eri_mo = ao2mo.general(mol, [mo,mo,mo,mo], compact=False)
-        eri_mo = eri_mo.reshape(nmo,nmo,nmo,nmo)
-        c1 += numpy.einsum('iapq->iapq',eri_mo[:nocc,nocc:]) * 2
-        c1 -= numpy.einsum('iqpa->iapq',eri_mo[:nocc,:,:,nocc:]) * hyb
+        eri_mo = ao2mo.general(mol, [mo, mo, mo, mo], compact=False)
+        eri_mo = eri_mo.reshape(nmo, nmo, nmo, nmo)
+        c1 += numpy.einsum('iapq->iapq', eri_mo[:nocc, nocc:]) * 2
+        c1 -= numpy.einsum('iqpa->iapq', eri_mo[:nocc, :, :, nocc:]) * hyb
 
     if not isinstance(mf, scf.hf.KohnShamDFT):
         add_hf_(C)
@@ -176,8 +180,8 @@ def _compute_c(mf):
     add_hf_(C, hyb)
     if omega != 0:  # For RSH
         with mol.with_range_coulomb(omega):
-            eri_mo = ao2mo.general(mol, [orbo,mo,mo,orbv], compact=False)
-            eri_mo = eri_mo.reshape(nocc,nmo,nmo,nvir)
+            eri_mo = ao2mo.general(mol, [orbo, mo, mo, orbv], compact=False)
+            eri_mo = eri_mo.reshape(nocc, nmo, nmo, nvir)
             k_fac = alpha - hyb
             C -= numpy.einsum('iqpa->iapq', eri_mo) * k_fac
 
@@ -187,11 +191,12 @@ def _compute_c(mf):
     make_rho = ni._gen_rho_evaluator(mol, dm0, hermi=1, with_lapl=False)[0]
     mem_now = lib.current_memory()[0]
     ## TODO: update memory usage
-    max_memory = max(2000, mf.max_memory*.8-mem_now)
+    max_memory = max(2000, mf.max_memory * .8 - mem_now)
 
-    if xctype=='GGA':
+    if xctype == 'GGA':
         ao_deriv = 1
-        for ao, mask, weight, coords in ni.block_loop(mol, mf.grids, nao, ao_deriv, max_memory):
+        for ao, mask, weight, coords in ni.block_loop(mol, mf.grids, nao,
+                                                      ao_deriv, max_memory):
             rho = make_rho(0, ao, mask, xctype)
 
             fxc = ni.eval_xc_eff(mf.xc, rho, deriv=2, xctype=xctype)[2]
@@ -200,22 +205,24 @@ def _compute_c(mf):
             rho = numpy.einsum('xrp,pi->xri', ao, mo)
             rho_xx = numpy.einsum('xrp,rq->xrpq', rho, rho[0])
             rho_xx[1:4] += numpy.einsum('rp,xrq->xrpq', rho[0], rho[1:4])
-            rho_xx = numpy.transpose(rho_xx, (1,2,3,0))
-            rho_ov = rho_xx[:,:nocc,nocc:]
+            rho_xx = numpy.transpose(rho_xx, (1, 2, 3, 0))
+            rho_ov = rho_xx[:, :nocc, nocc:]
 
             w_xx = numpy.einsum('rpqx,xyr->ypqr', rho_xx, wfxc, optimize=True)
-            iapq = numpy.einsum('xpqr,riax->iapq', w_xx, rho_ov, optimize=True) * 2
+            iapq = numpy.einsum('xpqr,riax->iapq', w_xx, rho_ov,
+                                optimize=True) * 2
             C += iapq
-    elif xctype=='LDA':
+    elif xctype == 'LDA':
         ao_deriv = 0
-        for ao, mask, weight, coords in ni.block_loop(mol, mf.grids, nao, ao_deriv, max_memory):
+        for ao, mask, weight, coords in ni.block_loop(mol, mf.grids, nao,
+                                                      ao_deriv, max_memory):
             rho = make_rho(0, ao, mask, xctype)
             fxc = ni.eval_xc_eff(mf.xc, rho, deriv=2, xctype=xctype)[2]
-            wfxc = fxc[0,0] * weight
+            wfxc = fxc[0, 0] * weight
 
             rho = numpy.einsum('rp,pi->ri', ao, mo)
             rho_xx = numpy.einsum('rp,rq->rpq', rho, rho)
-            rho_ov = rho_xx[:,:nocc,nocc:]
+            rho_ov = rho_xx[:, :nocc, nocc:]
             w_ov = numpy.einsum('ria,r->ria', rho_ov, wfxc)
             iapq = numpy.einsum('rpq,ria->iapq', rho_xx, w_ov) * 2
             C += iapq
@@ -228,12 +235,12 @@ def _compute_c(mf):
 def _get_ab_from_c(C, mo_energy):
     '''Returns the regular A,B matrices given C from :meth:``_compute_c``'''
     nocc, nvirt = C.shape[:2]
-    e_ia = mo_energy[nocc:] - mo_energy[:nocc,None]
-    A = numpy.diag(e_ia.ravel()).reshape(nocc,nvirt,nocc,nvirt)
+    e_ia = mo_energy[nocc:] - mo_energy[:nocc, None]
+    A = numpy.diag(e_ia.ravel()).reshape(nocc, nvirt, nocc, nvirt)
     B = numpy.zeros_like(A)
-    A += C[:,:,nocc:,:nocc].transpose((0,1,3,2))
-    B += C[:,:,:nocc,nocc:]
-    return numpy.reshape((A,B), (2,nocc*nvirt,nocc*nvirt))
+    A += C[:, :, nocc:, :nocc].transpose((0, 1, 3, 2))
+    B += C[:, :, :nocc, nocc:]
+    return numpy.reshape((A, B), (2, nocc * nvirt, nocc * nvirt))
 
 
 class Gxc:
@@ -265,8 +272,8 @@ class Gxc:
         self.G = None
         if precompute_gxc:
             nvirt = int(numpy.count_nonzero(qr.mo_occ == 0))
-            self._gxc_shape = gxc_tensor_shape(
-                qr._manifold_n, qr._manifold_m, nvirt)
+            self._gxc_shape = gxc_tensor_shape(qr._manifold_n, qr._manifold_m,
+                                               nvirt)
         else:
             self._gxc_shape = None
 
@@ -307,8 +314,11 @@ class Gxc:
             # Optimized for frozen orbitals
             xpy1_ = xpy1[self.occ_idx_n]
             xpy2_ = xpy2[self.occ_idx_m]
-            return numpy.einsum(
-                'iajbkc,jb,kc->ia', self.G, xpy1_, xpy2_, optimize=True)
+            return numpy.einsum('iajbkc,jb,kc->ia',
+                                self.G,
+                                xpy1_,
+                                xpy2_,
+                                optimize=True)
 
         if mo_occ is None: mo_occ = mf.mo_occ
         mo_energy = mf.mo_energy
@@ -318,15 +328,15 @@ class Gxc:
 
         mol = mf.mol
         nao, nmo = mo_coeff.shape
-        occidx = numpy.where(mo_occ==2)[0]
-        viridx = numpy.where(mo_occ==0)[0]
-        orbv = mo_coeff[:,viridx]
-        orbo = mo_coeff[:,occidx]
+        occidx = numpy.where(mo_occ == 2)[0]
+        viridx = numpy.where(mo_occ == 0)[0]
+        orbv = mo_coeff[:, viridx]
+        orbo = mo_coeff[:, occidx]
         nvir = orbv.shape[1]
         nocc = orbo.shape[1]
-        mo = numpy.hstack((orbo,orbv))
+        mo = numpy.hstack((orbo, orbv))
 
-        G = numpy.zeros((nocc,nvir))
+        G = numpy.zeros((nocc, nvir))
 
         if not isinstance(mf, scf.hf.KohnShamDFT):
             return G
@@ -338,48 +348,56 @@ class Gxc:
         dm0 = mf.make_rdm1(mo_coeff, mo_occ)
         make_rho = ni._gen_rho_evaluator(mol, dm0, hermi=1, with_lapl=False)[0]
         mem_now = lib.current_memory()[0]
-        max_memory = max(2000, mf.max_memory*.8-mem_now)
+        max_memory = max(2000, mf.max_memory * .8 - mem_now)
 
-        if xctype=='GGA':
+        if xctype == 'GGA':
             ao_deriv = 1
-            for ao, mask, weight, coords in ni.block_loop(mol, mf.grids, nao, ao_deriv, max_memory):
+            for ao, mask, weight, coords in ni.block_loop(
+                    mol, mf.grids, nao, ao_deriv, max_memory):
                 rho = make_rho(0, ao, mask, xctype)
                 gxc = ni.eval_xc_eff(mf.xc, rho, deriv=3, xctype=xctype)[3]
 
                 rho_o = numpy.einsum('xrp,pi->xri', ao, orbo)
                 rho_v = numpy.einsum('xrp,pi->xri', ao, orbv)
                 rho_ov = numpy.einsum('xrp,rq->xrpq', rho_o, rho_v[0])
-                rho_ov[1:4] += numpy.einsum('rp,xrq->xrpq', rho_o[0], rho_v[1:4])
+                rho_ov[1:4] += numpy.einsum('rp,xrq->xrpq', rho_o[0],
+                                            rho_v[1:4])
                 # This makes later contractions much faster
-                rho_ov = numpy.transpose(rho_ov, (1,2,3,0))
+                rho_ov = numpy.transpose(rho_ov, (1, 2, 3, 0))
 
                 # Convert excitation in MO basis to grid domain.
-                xp1 = numpy.einsum('riax,ia->rx',rho_ov,xpy1)
-                xp2 = numpy.einsum('riax,ia->rx',rho_ov,xpy2)
+                xp1 = numpy.einsum('riax,ia->rx', rho_ov, xpy1)
+                xp2 = numpy.einsum('riax,ia->rx', rho_ov, xpy2)
 
                 # '...r,r...->...' looks like matrix multiplication. This is fast!
                 wgxc = gxc * weight
-                w_ov = numpy.einsum('riax,xyzr->yziar', rho_ov, wgxc, optimize=True)
+                w_ov = numpy.einsum('riax,xyzr->yziar',
+                                    rho_ov,
+                                    wgxc,
+                                    optimize=True)
                 iajb = numpy.einsum('rx,xyiar->yiar', xp1, w_ov, optimize=True)
-                iajbkc = numpy.einsum('xiar,rx->ia', iajb, xp2, optimize=True) * 4
+                iajbkc = numpy.einsum('xiar,rx->ia', iajb, xp2,
+                                      optimize=True) * 4
                 G += iajbkc
-        elif xctype=='LDA':
+        elif xctype == 'LDA':
             ao_deriv = 0
-            for ao, mask, weight, coords in ni.block_loop(mol, mf.grids, nao, ao_deriv, max_memory):
+            for ao, mask, weight, coords in ni.block_loop(
+                    mol, mf.grids, nao, ao_deriv, max_memory):
                 rho = make_rho(0, ao, mask, xctype)
                 gxc = ni.eval_xc_eff(mf.xc, rho, deriv=3, xctype=xctype)[3]
 
                 rho = numpy.einsum('rp,pi->ri', ao, mo)
                 rho_xx = numpy.einsum('rp,rq->rpq', rho, rho)
-                rho_ov = rho_xx[:,:nocc,nocc:]
+                rho_ov = rho_xx[:, :nocc, nocc:]
 
                 xp1 = numpy.einsum('ria,ia->r', rho_ov, xpy1)
                 xp2 = numpy.einsum('ria,ia->r', rho_ov, xpy2)
 
-                wgxc = gxc[0,0,0] * weight
+                wgxc = gxc[0, 0, 0] * weight
                 w_ov = numpy.einsum('ria,r->iar', rho_ov, wgxc, optimize=True)
                 iajb = numpy.einsum('r,iar->iar', xp1, w_ov, optimize=True)
-                iajbkc = numpy.einsum('iar,r->ia', iajb, xp2, optimize=True) * 4
+                iajbkc = numpy.einsum('iar,r->ia', iajb, xp2,
+                                      optimize=True) * 4
                 G += iajbkc
         else:
             raise NotImplementedError(f'xctype = {xctype}')
@@ -434,7 +452,8 @@ def oscillator_strength(qrobj, i, j, tdm=None):
     tdip = qrobj.transition_dipole(tdm)
     ei, _ = qrobj._manifold_n(i)
     ej, _ = qrobj._manifold_m(j)
-    return float(2./3. * (ej - ei) * numpy.dot(tdip, tdip))
+    return float(2. / 3. * (ej - ei) * numpy.dot(tdip, tdip))
+
 
 class RQR(QR):
     '''Quadratic response for restricted RHF/RKS references.'''
@@ -444,7 +463,6 @@ class RQR(QR):
 
     def _init_gxc(self):
         self._gxc_backend = Gxc(self, precompute_gxc=self.precompute_gxc)
-
 
     def _build_intermediates(self):
         C = _compute_c(self._scf)
@@ -491,7 +509,7 @@ class RQR(QR):
         e1, (x1, y1) = self._manifold_n(i)
         e2, (x2, y2) = self._manifold_m(j)
         tdm = _get_2tdm_diag_block(x1, x2, y1, y2)
-        if self.approximation == 'Nascimento': # TODO: to_lower str if not None
+        if self.approximation == 'Nascimento':  # TODO: to_lower str if not None
             return tdm
 
         inter = self.intermediates
@@ -518,13 +536,12 @@ class RQR(QR):
             xym = numpy.linalg.solve(Lambda, -pqm)
         else:
             log.info('  Solving Casida eq. with ω = ΩM - ΩN.')
-            xym = numpy.linalg.solve(Lambda - (e2-e1)*Delta, -pqm)
-        _x2, _y2 = numpy.reshape(xym, (2,nocc,nvirt))
+            xym = numpy.linalg.solve(Lambda - (e2 - e1) * Delta, -pqm)
+        _x2, _y2 = numpy.reshape(xym, (2, nocc, nvirt))
 
         # Fill in off-diagonal blocks of 2TDM. Some flip the convention by
         # transposing. I think this follows PySCFs linear response convention.
-        tdm[:nocc,nocc:] = _y2
-        tdm[nocc:,:nocc] = _x2.T
+        tdm[:nocc, nocc:] = _y2
+        tdm[nocc:, :nocc] = _x2.T
 
         return tdm
-

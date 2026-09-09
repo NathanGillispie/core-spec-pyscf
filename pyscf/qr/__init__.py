@@ -50,4 +50,3 @@ __all__ = [
 ]
 
 __author__ = "Nathan Gillispie"
-

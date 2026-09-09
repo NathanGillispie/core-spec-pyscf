@@ -26,6 +26,7 @@ def test_public_exports():
     assert hasattr(pyscf.qr, 'GQR')
     assert hasattr(pyscf.qr, 'gxc_tensor_shape')
 
+
 @pytest.fixture(scope='module')
 def he_mf():
     mol = gto.M(atom='He 0 0 0', basis='6-31g', verbose=0)
@@ -88,16 +89,20 @@ def test_gxc_tensor_shape_two_manifolds(he_mf):
     occ_a = numpy.array([0], dtype=int)
     occ_b = numpy.array([0, 1], dtype=int)
     man_a = Manifold(
-        mol=he_mf.mol, mo_coeff=he_mf.mo_coeff, mo_occ=he_mf.mo_occ,
+        mol=he_mf.mol,
+        mo_coeff=he_mf.mo_coeff,
+        mo_occ=he_mf.mo_occ,
         occ_idx=occ_a,
         e=numpy.array([0.1]),
-        xy=((numpy.zeros((1, 1)), numpy.zeros((1, 1))),),
+        xy=((numpy.zeros((1, 1)), numpy.zeros((1, 1))), ),
     )
     man_b = Manifold(
-        mol=he_mf.mol, mo_coeff=he_mf.mo_coeff, mo_occ=he_mf.mo_occ,
+        mol=he_mf.mol,
+        mo_coeff=he_mf.mo_coeff,
+        mo_occ=he_mf.mo_occ,
         occ_idx=occ_b,
         e=numpy.array([0.2]),
-        xy=((numpy.zeros((2, 1)), numpy.zeros((2, 1))),),
+        xy=((numpy.zeros((2, 1)), numpy.zeros((2, 1))), ),
     )
     nvirt = int(numpy.count_nonzero(he_mf.mo_occ == 0))
     shape = gxc_tensor_shape(man_a, man_b, nvirt)
@@ -200,9 +205,12 @@ def test_get_aligned_xy_padding(he_mf):
     occ_idx = numpy.array([0], dtype=int)
     nvirt = int(numpy.count_nonzero(mo_occ == 0))
     man = Manifold(
-        mol=he_mf.mol, mo_coeff=he_mf.mo_coeff, mo_occ=mo_occ,
+        mol=he_mf.mol,
+        mo_coeff=he_mf.mo_coeff,
+        mo_occ=mo_occ,
         occ_idx=occ_idx,
-        e=numpy.array([0.1]), xy=((numpy.ones((1, nvirt)), None),),
+        e=numpy.array([0.1]),
+        xy=((numpy.ones((1, nvirt)), None), ),
     )
     x_pad, y_pad = man.get_aligned_xy(0)
     assert x_pad.shape == (2, nvirt)
@@ -217,9 +225,12 @@ def test_manifold_call(he_mf):
     nvirt = int(numpy.count_nonzero(mo_occ == 0))
     e = numpy.array([0.42])
     man = Manifold(
-        mol=he_mf.mol, mo_coeff=he_mf.mo_coeff, mo_occ=mo_occ,
+        mol=he_mf.mol,
+        mo_coeff=he_mf.mo_coeff,
+        mo_occ=mo_occ,
         occ_idx=occ_idx,
-        e=e, xy=((numpy.ones((1, nvirt)), None),),
+        e=e,
+        xy=((numpy.ones((1, nvirt)), None), ),
     )
     e_out, (x, y) = man(0)
     assert e_out == 0.42
@@ -265,7 +276,7 @@ def test_manifold_from_tdobj(he_mf):
     td = RPA(he_mf).set(nstates=1)
     td.kernel()
     manifold = Manifold.from_tdobj(td)
-    assert manifold.e.shape == (1,)
+    assert manifold.e.shape == (1, )
     assert len(manifold.xy) == 1
     assert manifold.xy[0][1] is not None
     assert len(manifold.occ_idx) == 1
@@ -278,5 +289,3 @@ def test_manifold_from_tda_tdobj(he_mf):
     td.kernel()
     manifold = Manifold.from_tdobj(td)
     assert manifold.xy[0][1] == 0
-
-

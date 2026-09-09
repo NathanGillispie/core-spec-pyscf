@@ -31,6 +31,6 @@ def test_so_coupling_matrix_h2():
     X_t = np.array([x for x, y in td_t.xy])
     X_so, w_so = compute_SO_coupling_matrix(mf, X_s, td_s.e, X_t, td_t.e)
     assert X_so.shape == (1, 1)
-    assert w_so.shape == (1,)
+    assert w_so.shape == (1, )
     assert np.isfinite(w_so).all()
     assert np.isfinite(X_so).all()

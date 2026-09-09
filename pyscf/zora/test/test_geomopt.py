@@ -6,8 +6,16 @@ import pytest
 pytest.importorskip('geometric')
 
 from pyscf.zora.test.common import (
-    GEOMOPT_GNORM_TOL, geomopt_gnorm, make_ghf, make_gks, make_hf_mol,
-    make_rhf, make_rks, make_uhf, make_uks, requires_ghf_grad,
+    GEOMOPT_GNORM_TOL,
+    geomopt_gnorm,
+    make_ghf,
+    make_gks,
+    make_hf_mol,
+    make_rhf,
+    make_rks,
+    make_uhf,
+    make_uks,
+    requires_ghf_grad,
 )
 
 

@@ -5,7 +5,8 @@ from pyscf.tdscf import TDA, TDDFT
 import numpy as np
 import pytest
 
-@pytest.mark.parametrize("ref", [ "RKS", "UKS", "GKS", "RHF", "UHF", "GHF" ])
+
+@pytest.mark.parametrize("ref", ["RKS", "UKS", "GKS", "RHF", "UHF", "GHF"])
 def test_direct_diag_tda(ref):
     mol = pyscf.M(atom='Ne 0 0 0', basis='6-31g', cart=True, verbose=0)
     mf = eval(f'pyscf.scf.{ref}(mol)')
@@ -21,7 +22,8 @@ def test_direct_diag_tda(ref):
     e2 = tdobj.e
     assert np.allclose(e1, e2)
 
-@pytest.mark.parametrize("ref", [ "RKS", "UKS", "GKS", "RHF", "UHF", "GHF" ])
+
+@pytest.mark.parametrize("ref", ["RKS", "UKS", "GKS", "RHF", "UHF", "GHF"])
 def test_direct_diag_rpa(ref):
     mol = pyscf.M(atom='Ne 0 0 0', basis='6-31g', cart=True, verbose=2)
     mf = eval(f'pyscf.scf.{ref}(mol)')
@@ -36,4 +38,3 @@ def test_direct_diag_rpa(ref):
     e2 = tdobj.e
 
     assert np.allclose(e1, e2)
-

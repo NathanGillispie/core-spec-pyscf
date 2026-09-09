@@ -19,7 +19,6 @@ CONV_PARAMS = {
     'convergence_dmax': 1.8e-3,
 }
 
-
 try:
     from pyscf.grad import ghf as _ghf_grad  # noqa: F401
 except ImportError:

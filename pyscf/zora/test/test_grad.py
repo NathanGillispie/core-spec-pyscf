@@ -5,8 +5,17 @@ import pyscf
 import pyscf.zora
 from pyscf.zora.grad import make_grad_object
 from pyscf.zora.test.common import (
-    ENERGY_GRAD_TOL, GRAD_GRID_LEVEL, energy_fd_error, make_ghf, make_gks,
-    make_hf_mol, make_rhf, make_rks, make_uhf, make_uks, requires_ghf_grad,
+    ENERGY_GRAD_TOL,
+    GRAD_GRID_LEVEL,
+    energy_fd_error,
+    make_ghf,
+    make_gks,
+    make_hf_mol,
+    make_rhf,
+    make_rks,
+    make_uhf,
+    make_uks,
+    requires_ghf_grad,
 )
 
 
@@ -47,8 +56,8 @@ def test_ghf_matches_rhf_scalar():
 
 @requires_ghf_grad
 def test_ghf_so_energy_grad():
-    err, _, _ = energy_fd_error(
-        lambda m: make_ghf(m, spin_orbit=True), make_hf_mol(1.1))
+    err, _, _ = energy_fd_error(lambda m: make_ghf(m, spin_orbit=True),
+                                make_hf_mol(1.1))
     assert err < ENERGY_GRAD_TOL, err
 
 
@@ -81,8 +90,8 @@ def test_gks_matches_rks_scalar():
 
 
 def test_gks_so_energy_grad():
-    err, _, _ = energy_fd_error(
-        lambda m: make_gks(m, spin_orbit=True), make_hf_mol(1.1))
+    err, _, _ = energy_fd_error(lambda m: make_gks(m, spin_orbit=True),
+                                make_hf_mol(1.1))
     assert err < ENERGY_GRAD_TOL, err
 
 

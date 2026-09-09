@@ -27,7 +27,8 @@ def save_qr(qrobj, chkfile=None):
 
     lib.chkfile.save(chkfile, _qr_key('manifold_n'), qrobj.manifold_n.dump())
     if qrobj.manifold_m is not qrobj.manifold_n:
-        lib.chkfile.save(chkfile, _qr_key('manifold_m'), qrobj.manifold_m.dump())
+        lib.chkfile.save(chkfile, _qr_key('manifold_m'),
+                         qrobj.manifold_m.dump())
 
 
 def load_manifold_n(chkfile, mf):

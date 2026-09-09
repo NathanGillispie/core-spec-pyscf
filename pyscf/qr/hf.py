@@ -21,8 +21,7 @@ def qr_class_for_mf(mf):
         return UQR
     if isinstance(mf, scf.hf.RHF):
         return RQR
-    raise TypeError(
-        f'Unsupported mean-field type {type(mf).__name__} for QR')
+    raise TypeError(f'Unsupported mean-field type {type(mf).__name__} for QR')
 
 
 class QR(lib.StreamObject):
@@ -61,16 +60,29 @@ class QR(lib.StreamObject):
     '''
 
     _keys = {
-        'verbose', 'stdout', 'max_memory', 'mol', 'chkfile',
-        'precompute_gxc', 'response_type', 'manifold_n', 'manifold_m',
-        'approximation', '_cached_intermediates',
+        'verbose',
+        'stdout',
+        'max_memory',
+        'mol',
+        'chkfile',
+        'precompute_gxc',
+        'response_type',
+        'manifold_n',
+        'manifold_m',
+        'approximation',
+        '_cached_intermediates',
     }
 
     precompute_gxc = False
     _cached_intermediates = None
 
-    def __init__(self, tdobj_n, tdobj_m=None, *, chkfile=None,
-                 precompute_gxc=False, approximation=None):
+    def __init__(self,
+                 tdobj_n,
+                 tdobj_m=None,
+                 *,
+                 chkfile=None,
+                 precompute_gxc=False,
+                 approximation=None):
         if tdobj_m is None:
             tdobj_m = tdobj_n
         elif tdobj_m is not tdobj_n:
@@ -96,7 +108,12 @@ class QR(lib.StreamObject):
         self._init_gxc()
 
     @classmethod
-    def _from_restored(cls, chkfile, mf, *, precompute_gxc=False, approximation=None):
+    def _from_restored(cls,
+                       chkfile,
+                       mf,
+                       *,
+                       precompute_gxc=False,
+                       approximation=None):
         '''Build a QR driver from a checkpoint file and a live mean-field object.
 
         Manifold data are read from *chkfile*; reference-specific behavior is
@@ -145,8 +162,9 @@ class QR(lib.StreamObject):
         QR subclass object.
         '''
         driver_cls = qr_class_for_mf(mf)
-        return driver_cls._from_restored(
-            chkfile, mf, precompute_gxc=precompute_gxc)
+        return driver_cls._from_restored(chkfile,
+                                         mf,
+                                         precompute_gxc=precompute_gxc)
 
     def save(self, chkfile=None):
         '''Write checkpoint to disk.
@@ -241,5 +259,5 @@ class QR(lib.StreamObject):
         e_i = float(self._manifold_n.e[i])
         e_j = float(self._manifold_m.e[j])
         lib.logger.new_logger(self).info(
-            'QR 2TDM: manifold_n[%d] -> manifold_m[%d], omega=%.6f Ha',
-            i, j, e_j - e_i)
+            'QR 2TDM: manifold_n[%d] -> manifold_m[%d], omega=%.6f Ha', i, j,
+            e_j - e_i)

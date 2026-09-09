@@ -10,36 +10,44 @@ from pyscf import gto, dft
 from pyscf.tdscf import RPA, TDA
 from pyscf.qr import QR
 
+
 @pytest.fixture(scope="module")
 def lih_mf():
-    mol = gto.M(atom='Li 0 0 0; H 0 0 1.6', basis='def2-SVP', verbose=0, symmetry=False)
+    mol = gto.M(atom='Li 0 0 0; H 0 0 1.6',
+                basis='def2-SVP',
+                verbose=0,
+                symmetry=False)
     return dft.RKS(mol, xc='PBE0').run()
+
 
 @pytest.fixture(scope="module")
 def lih_mf_lda():
-    mol = gto.M(atom='Li 0 0 0; H 0 0 1.6', basis='def2-SVP', verbose=0, symmetry=False)
+    mol = gto.M(atom='Li 0 0 0; H 0 0 1.6',
+                basis='def2-SVP',
+                verbose=0,
+                symmetry=False)
     return dft.RKS(mol, xc='LDA').run()
 
 
 @pytest.mark.parametrize('td', [RPA, TDA])
-@pytest.mark.parametrize('frozen_idx',
-    [numpy.asarray([]), numpy.asarray([0])],
-    ids = ["Freeze[]", "Freeze[0]"]
-)
-@pytest.mark.parametrize('precompute_gxc', [True, False], ids = ['eager', 'lazy'])
+@pytest.mark.parametrize(
+    'frozen_idx', [numpy.asarray([]), numpy.asarray([0])],
+    ids=["Freeze[]", "Freeze[0]"])
+@pytest.mark.parametrize('precompute_gxc', [True, False],
+                         ids=['eager', 'lazy'])
 def test_qr_options_gga(lih_mf, precompute_gxc, td, frozen_idx):
     tdobj = td(lih_mf).run(nstates=4, frozen=frozen_idx)
     qrobj = QR(tdobj, precompute_gxc=precompute_gxc).kernel()
-    qrobj.get_2tdm(0,3)
+    qrobj.get_2tdm(0, 3)
 
 
 @pytest.mark.parametrize('td', [RPA, TDA])
-@pytest.mark.parametrize('frozen_idx',
-    [numpy.asarray([]), numpy.asarray([0])],
-    ids = ["Freeze[]", "Freeze[0]"]
-)
-@pytest.mark.parametrize('precompute_gxc', [True, False], ids = ['eager', 'lazy'])
+@pytest.mark.parametrize(
+    'frozen_idx', [numpy.asarray([]), numpy.asarray([0])],
+    ids=["Freeze[]", "Freeze[0]"])
+@pytest.mark.parametrize('precompute_gxc', [True, False],
+                         ids=['eager', 'lazy'])
 def test_qr_options_lda(lih_mf_lda, precompute_gxc, td, frozen_idx):
     tdobj = td(lih_mf_lda).run(nstates=4, frozen=frozen_idx)
     qrobj = QR(tdobj, precompute_gxc=precompute_gxc).kernel()
-    qrobj.get_2tdm(0,3)
+    qrobj.get_2tdm(0, 3)

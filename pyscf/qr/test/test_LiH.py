@@ -25,6 +25,7 @@ from pyscf.qr.rhf import (
 _DATA = os.path.join(os.path.dirname(__file__), 'lih_ref_intermediates.npz')
 _PAIRS = [(0, 3), (0, 1), (1, 3), (2, 3)]
 
+
 @pytest.fixture(scope='module')
 def lih_intermediates():
     '''Stored-reference + freshly-computed QR intermediates for LiH state pairs.
@@ -32,7 +33,7 @@ def lih_intermediates():
     The MO basis is pinned to the stored one and the QR path is deteministic.
     '''
 
-    # Get pre-computed reference intermediates 
+    # Get pre-computed reference intermediates
     data = numpy.load(_DATA)
 
     mol = gto.M(atom='Li 0 0 0; H 0 0 1.6', basis='def2-svp', verbose=0)
@@ -59,8 +60,11 @@ def lih_intermediates():
 
         out[(n, m)] = dict(
             ref=dict(
-                C=data['C'], V=data[f'V_{n}_{m}'], Knm=data[f'Knm_{n}_{m}'],
-                Pia=data[f'Pia_{n}_{m}'], Qia=data[f'Qia_{n}_{m}'],
+                C=data['C'],
+                V=data[f'V_{n}_{m}'],
+                Knm=data[f'Knm_{n}_{m}'],
+                Pia=data[f'Pia_{n}_{m}'],
+                Qia=data[f'Qia_{n}_{m}'],
             ),
             qr=dict(C=C_qr, V=V_qr, Knm=Knm_qr, Pia=Pia_qr, Qia=Qia_qr),
         )
@@ -114,6 +118,7 @@ def test_intermediate_Qia(lih_intermediates, pair):
 #   Transition dipole moment + oscillator strength (state 0 -> state 3).    |
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def lih_td():
     mol = gto.M(atom='Li 0 0 0; H 0 0 1.6', basis='def2-svp', verbose=0)
@@ -127,9 +132,9 @@ def test_oscillator_strength_tdm_passthrough(lih_td):
     '''Passing an explicit 2TDM must match the internally computed one.'''
     qr = QR(lih_td)
     tdm = qr.get_2tdm(0, 3)
-    numpy.testing.assert_allclose(
-        qr.oscillator_strength(0, 3, tdm=tdm),
-        qr.oscillator_strength(0, 3))
+    numpy.testing.assert_allclose(qr.oscillator_strength(0, 3, tdm=tdm),
+                                  qr.oscillator_strength(0, 3))
+
 
 def test_transition_dipole(lih_td):
     qr = QR(lih_td)
@@ -152,7 +157,6 @@ def test_transition_dipole_approximation(lih_td, approximation, tdip_ref):
 
 def test_oscillator_strength(lih_td):
     qr = QR(lih_td)
-    numpy.testing.assert_allclose(
-        qr.oscillator_strength(0, 3), 1.35903052e-03, rtol=1e-7)
-
-
+    numpy.testing.assert_allclose(qr.oscillator_strength(0, 3),
+                                  1.35903052e-03,
+                                  rtol=1e-7)
