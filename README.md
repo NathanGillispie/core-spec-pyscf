@@ -40,10 +40,23 @@ The Zeroth-Order Regular Approximation (ZORA) can be applied to any HF/KS object
 from pyscf import gto, scf
 import pyscf.zora
 mol = gto.M(...)
-mf = scf.RHF(mol).zora() # wow! so easy
+mf = scf.RHF(mol).zora()
 mf.run()
 ```
-It works by replacing the core Hamiltonian of the SCF object with its scalar-relativistic counterpart.
+This is model-potential (MP) ZORA: the core Hamiltonian is replaced with a scalar-relativistic counterpart built from tabulated atomic model potentials (not a self-consistent molecular KS potential). Assign the return value (`mf = mf.zora()`).
+
+Nuclear gradients and geometry optimization use the usual PySCF hooks:
+```py
+de = mf.Gradients().kernel()
+mol_eq = mf.Gradients().optimizer().kernel()
+```
+When composing with density fitting, apply `.zora()` last (`mf.density_fit().zora()`).
+
+Spin–orbit MP-ZORA is available on GHF/GKS:
+```py
+mf = scf.GHF(mol).zora(spin_orbit=True)
+```
+The ZORA quadrature level defaults to 8 (`mf.with_zora.grid_level`). Grid-weight response, GTH pseudopotential gradients, and picture-change properties are not implemented.
 
 ### Core-valence separation
 

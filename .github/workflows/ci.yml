@@ -29,6 +29,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install pyscf
         pip install pytest
+        pip install geometric
         pip install -e .
     - name: Test
       run: |
