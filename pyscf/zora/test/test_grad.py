@@ -78,6 +78,7 @@ def test_uks_matches_rks_closed_shell():
     assert abs(mf_r.e_tot - mf_u.e_tot) < 1e-7
 
 
+@requires_ghf_grad
 def test_gks_matches_rks_scalar():
     mol = make_hf_mol(1.1)
     mf_r = make_rks(mol)
@@ -89,6 +90,7 @@ def test_gks_matches_rks_scalar():
     assert np.max(np.abs(de_r - de_g)) < 1e-6
 
 
+@requires_ghf_grad
 def test_gks_so_energy_grad():
     err, _, _ = energy_fd_error(lambda m: make_gks(m, spin_orbit=True),
                                 make_hf_mol(1.1))

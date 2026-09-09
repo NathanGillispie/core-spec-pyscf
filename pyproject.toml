@@ -13,13 +13,14 @@ include = ["pyscf.*"]
 testpaths = ["pyscf"]
 addopts = [
     "-s",
-    "--cov=pyscf.cvs",
-    "--cov=pyscf.qr",
-    "--cov=pyscf.zora",
+    "--cov=pyscf/cvs",
+    "--cov=pyscf/qr",
+    "--cov=pyscf/zora",
     "--cov-report=term-missing",
 ]
 
 [tool.coverage.run]
+source = ["pyscf/cvs", "pyscf/qr", "pyscf/zora"]
 omit = ["*/test/*"]
 
 [project]

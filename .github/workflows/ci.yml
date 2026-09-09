@@ -45,7 +45,7 @@ jobs:
     - name: Test
       run: |
         export PYSCF_EXT_PATH=$(pwd):$PYSCF_EXT_PATH
-        python -m pytest -s --cov --cov-report json
+        python -m pytest --cov-report=json
     - name: Update Coverage Badge
       if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
       uses: we-cli/coverage-badge-action@main
