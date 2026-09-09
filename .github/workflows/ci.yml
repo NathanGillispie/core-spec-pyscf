@@ -34,7 +34,12 @@ jobs:
           echo "Using PySCF >= 2.15 from PyPI"
         else
           echo "PySCF 2.15 is not on PyPI yet; installing from git master"
-          pip install "git+https://github.com/pyscf/pyscf.git"
+          # Git installs compile C extensions; GitHub Ubuntu images have no BLAS.
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake g++ gfortran libopenblas-dev
+          CMAKE_CONFIGURE_ARGS="-DBLA_VENDOR=OpenBLAS" \
+            pip install "git+https://github.com/pyscf/pyscf.git"
         fi
         pip install -e .
     - name: Test
