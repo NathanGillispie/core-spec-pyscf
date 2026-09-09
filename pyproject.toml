@@ -12,7 +12,6 @@ include = ["pyscf.*"]
 [tool.pytest.ini_options]
 testpaths = ["pyscf"]
 addopts = [
-    "-s",
     "--cov=pyscf/cvs",
     "--cov=pyscf/qr",
     "--cov=pyscf/zora",
