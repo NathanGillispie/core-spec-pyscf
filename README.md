@@ -1,5 +1,6 @@
 # Core spectroscopy for [PySCF](https://github.com/pyscf/pyscf)
 [![pytest](https://github.com/NathanGillispie/core-spec-pyscf/actions/workflows/ci.yml/badge.svg)](https://github.com/NathanGillispie/core-spec-pyscf/actions/workflows/ci.yml)
+[![cov](https://NathanGillispie.github.io/core-spec-pyscf/badges/coverage.svg)](https://github.com/NathanGillispie/core-spec-pyscf/actions)
 
 I'm proud to announce that this is the *first open-source implementation* of excited-excited state transition moments from TDDFT response theory (for GGA + LDA functionals and restricted references)! VeloxChem beat me to frequency-dependent QR... This was very difficult, but necessary for my PhD work.
 
