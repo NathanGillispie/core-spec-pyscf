@@ -1,28 +1,9 @@
 import pyscf
-from pyscf.tdscf.ghf import TDHF, TDA, TDBase, get_ab as _ghf_get_ab_impl
-from pyscf.tdscf.gks import CasidaTDDFT
 import numpy
 from scipy.linalg import sqrtm
 
 from pyscf.lib import logger
 from .no_fxc import get_ab_no_fxc_ghf
-from ._utils import core_valence_restricted, patch_td_class, prepare_kernel
-
-core_valence = core_valence_restricted
-
-
-@pyscf.lib.with_doc(_ghf_get_ab_impl.__doc__)
-def _ghf_get_ab(self, mf=None, frozen=None):
-    if mf is None:
-        mf = self._scf
-    if frozen is None:
-        frozen = self.frozen
-    return _ghf_get_ab_impl(mf, frozen=frozen)
-
-
-if not getattr(TDBase, '_cvs_get_ab_patched', False):
-    TDBase.get_ab = _ghf_get_ab
-    TDBase._cvs_get_ab_patched = True
 
 
 def _get_ab(tdobj, no_fxc=False):
@@ -133,26 +114,3 @@ def direct_diag_rpa_kernel(self, x0=None, nstates=None, no_fxc=False):
     log.timer('TDHF/TDDFT', *cpu0)
     self._finalize()
     return self.e, self.xy
-
-
-@pyscf.lib.with_doc(TDHF.kernel.__doc__)
-def rpa_kernel(self, **kwargs):
-    '''Monkey-patched TDHF/TDDFT kernel for CVS'''
-    no_fxc, direct_diag = prepare_kernel(self, kwargs, core_valence)
-    if direct_diag:
-        return direct_diag_rpa_kernel(self, no_fxc=no_fxc, **kwargs)
-    return self._old_kernel(**kwargs)
-
-
-@pyscf.lib.with_doc(TDA.kernel.__doc__)
-def tda_kernel(self, **kwargs):
-    '''Monkey-patched TDA kernel for CVS'''
-    no_fxc, direct_diag = prepare_kernel(self, kwargs, core_valence)
-    if direct_diag:
-        return direct_diag_tda_kernel(self, no_fxc=no_fxc, **kwargs)
-    return self._old_kernel(**kwargs)
-
-
-patch_td_class(TDHF, rpa_kernel, core_valence)
-patch_td_class(CasidaTDDFT, rpa_kernel, core_valence)
-patch_td_class(TDA, tda_kernel, core_valence)

@@ -7,10 +7,11 @@ def test_plugin_import():
 
 
 def test_plugin_hasattr():
-    from pyscf.tdscf.rhf import TDHF
+    from pyscf.tdscf.rhf import TDBase, TDHF
     import pyscf.cvs
-    assert hasattr(TDHF, 'core_valence')
-    assert hasattr(TDHF, '_old_kernel')
+    assert hasattr(TDBase, 'cvs')
+    assert hasattr(TDHF, 'cvs')
+    assert not hasattr(TDHF, '_old_kernel')
 
 
 def test_doc():

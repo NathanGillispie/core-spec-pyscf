@@ -1,29 +1,27 @@
 '''
 Core-valence separation for TDDFT calculations.
 
-Specify the occupied orbitals to excite from with ``core_idx``. This is
-converted to PySCF's ``frozen`` attribute where valence occupied orbitals are
-frozen.
+Wrap a TDSCF object with :meth:`cvs` (assign the return value)::
 
->>> tdobj.core_idx = [0, 1, 2]
->>> tdobj.kernel()
+    import pyscf.cvs
+    td = TDA(mf).cvs(core_idx=[0, 1, 2])
+    td.kernel()
 
-Alternatively,
+``core_idx`` is converted to PySCF's ``frozen`` attribute (valence occupied
+orbitals are frozen). The SCF ``mo_coeff`` / ``mo_occ`` / ``mo_energy`` arrays
+and ``mol.nelec`` are left unchanged.
 
->>> tdobj.kernel(core_idx=[0, 1, 2])
+For UHF/UKS, pass a ``(alpha, beta)`` pair::
 
-Or,
+    td = TDA(mf).cvs(core_idx=([0, 1], [0, 1]))
 
->>> tdobj.core_valence(core_idx=[0, 1, 2])
->>> tdobj.kernel()
+Direct diagonalization and dropping :math:`f_\\text{xc}`::
 
-For UHF/UKS objects, specify a ``(alpha, beta)`` pair:
-
->>> tdobj.core_idx = ([0, 1], [0, 1])
-
-You can also set ``tdobj.frozen`` directly using PySCF's convention.
+    td = TDA(mf).cvs(direct_diag=True, no_fxc=True)
+    td.kernel()
 '''
 
-from pyscf.cvs import rhf
-from pyscf.cvs import uhf
-from pyscf.cvs import ghf
+from pyscf.tdscf.rhf import TDBase
+from pyscf.cvs.td import CVS, cvs
+
+TDBase.cvs = cvs

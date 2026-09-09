@@ -61,7 +61,7 @@ The ZORA quadrature level defaults to 8 (`mf.with_zora.grid_level`). Grid-weight
 
 ### Core-valence separation
 
-You can specify excitations out of core orbitals by adding a `core_idx` attribute to the TDHF/TDDFT object after importing `pyscf.cvs`.
+You can specify excitations out of core orbitals by wrapping a TDHF/TDDFT object with `.cvs()` after importing `pyscf.cvs`. Occupied orbitals that are not listed in `core_idx` are frozen through PySCF's `frozen` attribute; the SCF orbitals and `mol.nelec` are left unchanged. Assign the return value.
 ```py
 from pyscf import gto, dft
 from pyscf.tdscf import TDA, TDDFT, TDHF # etc.
@@ -69,20 +69,17 @@ import pyscf.cvs
 mol = gto.M(...)
 mf = dft.RKS(mol).run()
 
-tdobj = TDDFT(mf)
+tdobj = TDDFT(mf).cvs(core_idx=[0, 1, 2])
 tdobj.nstates = 80
-tdobj.core_idx = [0,1,2] # wow! so easy
 tdobj.kernel()
 ```
-For unrestricted references, excitations out of the alpha and beta orbitals are specified in a tuple. Note that this is destructive to the SCFs `mo_coeff`, `mo_occ`, `mo_energy` and MOLs `nelec`. I might fix that later.
+For unrestricted references, excitations out of the alpha and beta orbitals are specified as a tuple, `([0,1], [0,1])`. Extra virtuals may be frozen on one spin so both spins keep the same number of active MOs (required by PySCF's UHF Davidson solver). You can also assign `tdobj.frozen` directly using the usual PySCF convention.
 
-To disable the $f_\text{xc}$ term, set the `no_fxc` attribute or keyword argument of the `kernel` function. The same syntax is used for direct diagonalizaton (`direct_diag`). Note that `pyscf.cvs` must still be imported as all the direct diagonalization code lives there.
+To disable the $f_\text{xc}$ term, pass `no_fxc=True`. The same syntax is used for direct diagonalization (`direct_diag`). Direct diagonalization is always used with `no_fxc`.
 ```py
 import pyscf.cvs
 
-tdobj = TDHF(mf)
-tdobj.no_fxc = True
-tdobj.direct_diag = True
+tdobj = TDHF(mf).cvs(no_fxc=True, direct_diag=True)
 tdobj.kernel()
 ```
 

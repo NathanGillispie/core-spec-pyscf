@@ -20,7 +20,7 @@ def test_trans_dip_tda(ref):
     e1 = tdobj.e
     t1 = np.sum(tdobj.transition_dipole()**2, axis=1)
 
-    tdobj.direct_diag = True
+    tdobj = tdobj.cvs(direct_diag=True)
     tdobj.kernel()
     e2 = tdobj.e
     t2 = np.sum(tdobj.transition_dipole()**2, axis=1)
@@ -41,7 +41,7 @@ def test_trans_dip_rpa(ref):
     e1 = tdobj.e
     t1 = np.sum(tdobj.transition_dipole()**2, axis=1)
 
-    tdobj.direct_diag = True
+    tdobj = tdobj.cvs(direct_diag=True)
     tdobj.kernel()
     e2 = tdobj.e
     t2 = np.sum(tdobj.transition_dipole()**2, axis=1)

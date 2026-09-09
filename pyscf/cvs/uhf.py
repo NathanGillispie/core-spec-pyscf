@@ -1,14 +1,9 @@
 import pyscf
-from pyscf.tdscf.uhf import TDHF, TDA
-from pyscf.tdscf.uks import CasidaTDDFT
 import numpy
 from scipy.linalg import sqrtm
 
 from pyscf.lib import logger
 from .no_fxc import get_ab_no_fxc_uhf
-from ._utils import core_valence_unrestricted, patch_td_class, prepare_kernel
-
-core_valence = core_valence_unrestricted
 
 
 def _get_ab(tdobj, no_fxc=False):
@@ -170,26 +165,3 @@ def direct_diag_rpa_kernel(self, x0=None, nstates=None, no_fxc=False):
     log.timer('TDHF/TDDFT', *cpu0)
     self._finalize()
     return self.e, self.xy
-
-
-@pyscf.lib.with_doc(TDHF.kernel.__doc__)
-def rpa_kernel(self, **kwargs):
-    '''Monkey-patched TDHF/TDDFT kernel for CVS'''
-    no_fxc, direct_diag = prepare_kernel(self, kwargs, core_valence)
-    if direct_diag:
-        return direct_diag_rpa_kernel(self, no_fxc=no_fxc, **kwargs)
-    return self._old_kernel(**kwargs)
-
-
-@pyscf.lib.with_doc(TDA.kernel.__doc__)
-def tda_kernel(self, **kwargs):
-    '''Monkey-patched TDA kernel for CVS'''
-    no_fxc, direct_diag = prepare_kernel(self, kwargs, core_valence)
-    if direct_diag:
-        return direct_diag_tda_kernel(self, no_fxc=no_fxc, **kwargs)
-    return self._old_kernel(**kwargs)
-
-
-patch_td_class(TDHF, rpa_kernel, core_valence)
-patch_td_class(CasidaTDDFT, rpa_kernel, core_valence)
-patch_td_class(TDA, tda_kernel, core_valence)

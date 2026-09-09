@@ -16,7 +16,7 @@ def test_direct_diag_tda(ref):
     tdobj.kernel(nstates=100)
     e1 = tdobj.e
 
-    tdobj.direct_diag = True
+    tdobj = tdobj.cvs(direct_diag=True)
     tdobj.kernel()
 
     e2 = tdobj.e
@@ -33,7 +33,7 @@ def test_direct_diag_rpa(ref):
     tdobj.kernel(nstates=1000)
     e1 = tdobj.e
 
-    tdobj.direct_diag = True
+    tdobj = tdobj.cvs(direct_diag=True)
     tdobj.kernel()
     e2 = tdobj.e
 

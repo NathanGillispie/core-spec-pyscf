@@ -4,14 +4,6 @@ import numpy
 from pyscf.lib import logger
 
 
-def parse_kernel_options(tdobj, kwargs):
-    '''Pop CVS kernel options, falling back to attributes on *tdobj*.'''
-    core_idx = kwargs.pop('core_idx', getattr(tdobj, 'core_idx', None))
-    no_fxc = kwargs.pop('no_fxc', getattr(tdobj, 'no_fxc', False))
-    direct_diag = kwargs.pop('direct_diag', getattr(tdobj, 'direct_diag', False))
-    return core_idx, no_fxc, direct_diag
-
-
 def _as_index_list(idx):
     if isinstance(idx, (int, numpy.integer)):
         return [int(idx)]
@@ -95,24 +87,3 @@ def core_valence_unrestricted(tdobj, core_idx=None):
     tdobj.frozen = (frozen_a, frozen_b)
     tdobj.core_idx = (core_a, core_b)
     return tdobj
-
-
-def patch_td_class(cls, kernel, core_valence):
-    '''Install CVS kernel/core_valence on *cls* without clobbering subclasses.'''
-    if '_old_kernel' not in cls.__dict__:
-        cls._old_kernel = cls.kernel
-    cls.kernel = kernel
-    cls.core_valence = core_valence
-    extra = {'core_idx', 'no_fxc', 'direct_diag'}
-    cls._keys = set(getattr(cls, '_keys', ())) | extra
-
-
-def prepare_kernel(tdobj, kwargs, core_valence):
-    '''Apply CVS options and decide whether to use direct diagonalization.'''
-    core_idx, no_fxc, direct_diag = parse_kernel_options(tdobj, kwargs)
-    if core_idx is not None:
-        core_valence(tdobj, core_idx=core_idx)
-    if no_fxc and not direct_diag:
-        logger.warn(tdobj, 'No fxc requested. Using direct diagonalization.')
-        direct_diag = True
-    return no_fxc, direct_diag
