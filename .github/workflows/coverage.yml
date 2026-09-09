@@ -1,18 +1,16 @@
-name: pytest
+name: coverage badge
 
 on:
   push:
     branches:
       - 'main'
       - $default-branch
-  pull_request:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  build:
-
+  coverage:
     runs-on: ubuntu-latest
 
     steps:
@@ -39,7 +37,9 @@ jobs:
             pip install "git+https://github.com/pyscf/pyscf.git"
         fi
         pip install -e .
-    - name: Test
+    - name: Test and generate coverage
       run: |
         export PYSCF_EXT_PATH=$(pwd):$PYSCF_EXT_PATH
         python -m pytest --cov-report=json
+    - name: Update Coverage Badge
+      uses: we-cli/coverage-badge-action@8a0b6ee05f6dd0f294089cbe7a848452a2b43eef
