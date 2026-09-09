@@ -1,5 +1,6 @@
 '''MP-ZORA geometry optimization: residual gradient at the optimized geometry.'''
 
+import numpy as np
 import pytest
 
 pytest.importorskip('geometric')
@@ -11,9 +12,14 @@ from pyscf.zora.test.common import (
 
 
 def test_rhf_geomopt():
-    gnorm, _, _ = geomopt_gnorm(lambda m: make_rhf(m, conv_tol=1e-10),
-                                make_hf_mol(1.3))
-    assert gnorm < GEOMOPT_GNORM_TOL, gnorm
+    from pyscf.zora.test.common import CONV_PARAMS
+    mol = make_hf_mol(1.3)
+    mf = make_rhf(mol, conv_tol=1e-10)
+    mol_eq = mf.Gradients().optimizer().kernel(CONV_PARAMS)
+    mf_eq = make_rhf(mol_eq, conv_tol=1e-10)
+    mf_eq.kernel()
+    de = mf_eq.Gradients().kernel()
+    assert np.linalg.norm(de) < GEOMOPT_GNORM_TOL
 
 
 def test_rks_geomopt():

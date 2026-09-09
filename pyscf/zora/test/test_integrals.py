@@ -64,6 +64,17 @@ def test_T_ao_grad_frozen_grid():
     assert errmax < FD_AO_TOL, errmax
 
 
+def test_eval_zora_T_and_eps_matches_T():
+    mol = make_hf_mol(1.1)
+    grid = integrals.build_zora_grid(mol, level=GRAD_GRID_LEVEL)
+    kernel = integrals.zora_kernel(integrals.eval_model_potential(mol, grid.coords))
+    T, _ = integrals.eval_zora_T(mol, grid, kernel)
+    T2, eps = integrals.eval_zora_T_and_eps(mol, grid, kernel)
+    assert np.allclose(T, T2)
+    assert eps.shape == T.shape
+    assert np.allclose(eps, eps.T)
+
+
 def test_Hso_ao_grad_frozen_grid():
     mol = make_hf_mol(1.1)
     ia = 1

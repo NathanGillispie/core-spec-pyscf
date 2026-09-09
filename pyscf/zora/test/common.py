@@ -70,10 +70,17 @@ def make_ghf(mol, conv_tol=1e-12, spin_orbit=False):
     return mf.zora(spin_orbit=spin_orbit, grid_level=GRAD_GRID_LEVEL)
 
 
-def make_gks(mol, conv_tol=1e-10):
+def make_gks(mol, conv_tol=1e-10, spin_orbit=False):
     mf = pyscf.dft.GKS(mol)
     mf.xc = 'lda,vwn'
     mf.collinear = 'col'
+    mf.verbose = 0
+    mf.conv_tol = conv_tol
+    return mf.zora(spin_orbit=spin_orbit, grid_level=GRAD_GRID_LEVEL)
+
+
+def make_rohf(mol, conv_tol=1e-12):
+    mf = pyscf.scf.ROHF(mol)
     mf.verbose = 0
     mf.conv_tol = conv_tol
     return _zora(mf)
