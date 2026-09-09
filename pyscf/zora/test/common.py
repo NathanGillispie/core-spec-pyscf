@@ -1,6 +1,7 @@
 '''Shared molecules and helpers for MP-ZORA nuclear-gradient tests.'''
 
 import numpy as np
+import pytest
 import pyscf
 import pyscf.zora
 from pyscf.zora import integrals
@@ -17,6 +18,17 @@ CONV_PARAMS = {
     'convergence_drms': 1.2e-3,
     'convergence_dmax': 1.8e-3,
 }
+
+
+try:
+    from pyscf.grad import ghf as _ghf_grad  # noqa: F401
+except ImportError:
+    _ghf_grad = None
+
+requires_ghf_grad = pytest.mark.skipif(
+    _ghf_grad is None,
+    reason='GHF/GKS nuclear gradients require pyscf.grad.ghf',
+)
 
 
 def make_hf_mol(bond_ang=1.1, verbose=0):
