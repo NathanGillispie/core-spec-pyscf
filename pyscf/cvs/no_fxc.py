@@ -3,14 +3,50 @@ from pyscf import lib, ao2mo
 import pyscf.tdscf
 
 
+def _mask_restricted(frozen, nmo):
+    moidx = numpy.ones(nmo, dtype=bool)
+    if frozen is None:
+        return moidx
+    if isinstance(frozen, (int, numpy.integer)):
+        moidx[:frozen] = False
+    elif hasattr(frozen, '__len__'):
+        moidx[list(frozen)] = False
+    else:
+        raise NotImplementedError(f'frozen={frozen!r}')
+    return moidx
+
+
+def _mask_unrestricted(frozen, nmo_a, nmo_b):
+    moidxa = numpy.ones(nmo_a, dtype=bool)
+    moidxb = numpy.ones(nmo_b, dtype=bool)
+    if frozen is None:
+        return moidxa, moidxb
+    if isinstance(frozen, (int, numpy.integer)):
+        moidxa[:frozen] = False
+        moidxb[:frozen] = False
+    elif hasattr(frozen, '__len__'):
+        if len(frozen) > 0:
+            if isinstance(frozen[0], (int, numpy.integer)):
+                frozen = (frozen, frozen)
+            moidxa[list(frozen[0])] = False
+            moidxb[list(frozen[1])] = False
+    else:
+        raise NotImplementedError(f'frozen={frozen!r}')
+    return moidxa, moidxb
+
+
 @lib.with_doc(pyscf.tdscf.rhf.get_ab.__doc__)
-def get_ab_no_fxc_rhf(mf=None):
+def get_ab_no_fxc_rhf(mf=None, frozen=None):
     if mf is None:
-        raise NotImplementedError("sorry")
+        raise NotImplementedError('get_ab_no_fxc_rhf requires a mean-field object')
     mo_energy = mf.mo_energy
     mo_coeff = mf.mo_coeff
     mo_occ = mf.mo_occ
-    # assert (mo_coeff.dtype == numpy.double)
+
+    moidx = _mask_restricted(frozen, mo_occ.size)
+    mo_energy = mo_energy[moidx]
+    mo_coeff = mo_coeff[:, moidx]
+    mo_occ = mo_occ[moidx]
 
     assert mo_coeff.dtype == numpy.float64
     mol = mf.mol
@@ -40,12 +76,17 @@ def get_ab_no_fxc_rhf(mf=None):
 
 
 @lib.with_doc(pyscf.tdscf.uhf.get_ab.__doc__)
-def get_ab_no_fxc_uhf(mf=None):
+def get_ab_no_fxc_uhf(mf=None, frozen=None):
     if mf is None:
-        raise NotImplementedError("sorry")
+        raise NotImplementedError('get_ab_no_fxc_uhf requires a mean-field object')
     mo_energy = mf.mo_energy
     mo_coeff = mf.mo_coeff
     mo_occ = mf.mo_occ
+
+    moidxa, moidxb = _mask_unrestricted(frozen, mo_occ[0].size, mo_occ[1].size)
+    mo_energy = (mo_energy[0][moidxa], mo_energy[1][moidxb])
+    mo_coeff = (mo_coeff[0][:, moidxa], mo_coeff[1][:, moidxb])
+    mo_occ = (mo_occ[0][moidxa], mo_occ[1][moidxb])
 
     assert mo_coeff[0].dtype == numpy.float64
     mol = mf.mol
@@ -107,12 +148,17 @@ def get_ab_no_fxc_uhf(mf=None):
 
 
 @lib.with_doc(pyscf.tdscf.ghf.get_ab.__doc__)
-def get_ab_no_fxc_ghf(mf=None):
+def get_ab_no_fxc_ghf(mf=None, frozen=None):
     if mf is None:
-        raise NotImplementedError("sorry")
+        raise NotImplementedError('get_ab_no_fxc_ghf requires a mean-field object')
     mo_energy = mf.mo_energy
     mo_coeff = mf.mo_coeff
     mo_occ = mf.mo_occ
+
+    moidx = _mask_restricted(frozen, mo_occ.size)
+    mo_energy = mo_energy[moidx]
+    mo_coeff = mo_coeff[:, moidx]
+    mo_occ = mo_occ[moidx]
 
     mol = mf.mol
     nmo = mo_occ.size

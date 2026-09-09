@@ -1,41 +1,39 @@
 import pyscf
-from pyscf.tdscf.ghf import TDHF, TDA
+from pyscf.tdscf.ghf import TDHF, TDA, TDBase, get_ab as _ghf_get_ab_impl
 from pyscf.tdscf.gks import CasidaTDDFT
 import numpy
 from scipy.linalg import sqrtm
 
 from pyscf.lib import logger
 from .no_fxc import get_ab_no_fxc_ghf
+from ._utils import core_valence_restricted, patch_td_class, prepare_kernel
+
+core_valence = core_valence_restricted
 
 
-def core_valence(self, core_idx=None):
-    '''This can be manually called to perform the CVS.
-    Don't try this with something silly like fractional occupation numbers.'''
-    if hasattr(self, 'core_idx'):
-        core_idx = self.core_idx
-    if core_idx is None:
-        raise RuntimeError('Core orbitals not specified')
-
-    self.check_sanity()  # scf object exists and ran
-    scf = self._scf
-
-    if type(core_idx) is int:
-        core_idx = [core_idx]
-
-    core_idx = numpy.asarray(core_idx)
-    scf.mol.nelec = (len(core_idx), len(core_idx))
-
-    occ_idx = numpy.where(scf.mo_occ != 0)
-    if not all(numpy.isin(core_idx, occ_idx)):
-        print('Listed core orbitals aren\'t even occupied!')
-    delete_idx = numpy.setxor1d(occ_idx, core_idx)
-
-    scf.mo_occ = numpy.delete(scf.mo_occ, delete_idx, 0)
-    scf.mo_coeff = numpy.delete(scf.mo_coeff, delete_idx, axis=1)
-    scf.mo_energy = numpy.delete(scf.mo_energy, delete_idx, 0)
+@pyscf.lib.with_doc(_ghf_get_ab_impl.__doc__)
+def _ghf_get_ab(self, mf=None, frozen=None):
+    if mf is None:
+        mf = self._scf
+    if frozen is None:
+        frozen = self.frozen
+    return _ghf_get_ab_impl(mf, frozen=frozen)
 
 
-def direct_diag_tda_kernel(self, x0=None, nstates=None):
+if not getattr(TDBase, '_cvs_get_ab_patched', False):
+    TDBase.get_ab = _ghf_get_ab
+    TDBase._cvs_get_ab_patched = True
+
+
+def _get_ab(tdobj, no_fxc=False):
+    frozen = getattr(tdobj, 'frozen', None)
+    mf = tdobj._scf
+    if no_fxc:
+        return get_ab_no_fxc_ghf(mf, frozen=frozen)
+    return tdobj.get_ab(mf=mf, frozen=frozen)
+
+
+def direct_diag_tda_kernel(self, x0=None, nstates=None, no_fxc=False):
     '''TDA diagonalization solver'''
     log = logger.new_logger(self)
     cpu0 = (logger.process_clock(), logger.perf_counter())
@@ -46,8 +44,8 @@ def direct_diag_tda_kernel(self, x0=None, nstates=None):
     else:
         self.nstates = nstates
 
-    A, _ = self.get_ab(mf=self._scf)
-    assert A.dtype == 'float64'
+    A, _ = _get_ab(self, no_fxc=no_fxc)
+    assert A.dtype == numpy.float64
     nocc = A.shape[0]
     nvir = A.shape[1]
     A = A.reshape(nocc * nvir, nocc * nvir)
@@ -72,7 +70,7 @@ def direct_diag_tda_kernel(self, x0=None, nstates=None):
     return self.e, self.xy
 
 
-def direct_diag_rpa_kernel(self, x0=None, nstates=None):
+def direct_diag_rpa_kernel(self, x0=None, nstates=None, no_fxc=False):
     '''TDHF/TDDFT direct-diagonalization solver'''
     log = logger.new_logger(self)
     cpu0 = (logger.process_clock(), logger.perf_counter())
@@ -82,46 +80,50 @@ def direct_diag_rpa_kernel(self, x0=None, nstates=None):
         nstates = self.nstates
     else:
         self.nstates = nstates
-    mol = self.mol
 
-    A, B = self.get_ab(mf=self._scf)
-    assert A.dtype == 'float64'
+    A, B = _get_ab(self, no_fxc=no_fxc)
+    assert A.dtype == numpy.float64
     nocc = A.shape[0]
     nvir = A.shape[1]
     A = A.reshape(nocc * nvir, nocc * nvir)
     B = B.reshape(nocc * nvir, nocc * nvir)
 
     sqamb = sqrtm(A - B)
-    if sqamb.dtype != 'float64':
+    if sqamb.dtype != numpy.float64:
         log.warn(
             "A-B is not positive semi-definite! Results may not be accurate. Try another basis?"
         )
-        sqamb = numpy.asarray(sqamb.real, dtype='float64')
+        sqamb = numpy.asarray(sqamb.real, dtype=numpy.float64)
     C = sqamb @ (A + B) @ sqamb
 
     e_squared, Z = numpy.linalg.eigh(C)
-    e = (e_squared)**.5
+    e = numpy.sqrt(numpy.clip(numpy.real(e_squared), 0, None))
+    inv_e = numpy.divide(
+        1.0, e, out=numpy.zeros_like(e), where=e > self.positive_eig_threshold)
 
     xmy = numpy.linalg.inv(sqamb) @ Z
-    xpy = sqamb @ Z
+    xpy = sqamb @ Z @ numpy.diag(inv_e)
 
     X = .5 * (xpy + xmy)
     Y = .5 * (xpy - xmy)
-    x1 = numpy.zeros((X.shape[0], X.shape[1] * 2))
-    x1[:, :nocc * nvir] += X
-    x1[:, nocc * nvir:] += Y
+    x1 = numpy.zeros((X.shape[0] * 2, X.shape[1]))
+    x1[:nocc * nvir] += X
+    x1[nocc * nvir:] += Y
 
-    self.e = numpy.extract(e > self.positive_eig_threshold, e)
+    keep_idx = numpy.where(e > self.positive_eig_threshold)[0]
 
     def norm_xy(z):
-        x, y = z.reshape(2, nocc, nvir)
+        x, y = z.reshape(2, -1)
         norm = pyscf.lib.norm(x)**2 - pyscf.lib.norm(y)**2
         if norm < 0:
             log.warn('TDDFT amplitudes |X| smaller than |Y|')
         norm = abs(norm)**-.5
-        return x * norm, y * norm
+        return x.reshape(nocc, nvir) * norm, y.reshape(nocc, nvir) * norm
 
-    self.xy = [norm_xy(z) for z in x1]
+    xy = [norm_xy(z) for i, z in enumerate(x1.T) if i in keep_idx]
+
+    self.xy = xy[:nstates]
+    self.e = (e[keep_idx])[:nstates]
     self.converged = [True]
 
     if self.chkfile:
@@ -136,87 +138,21 @@ def direct_diag_rpa_kernel(self, x0=None, nstates=None):
 @pyscf.lib.with_doc(TDHF.kernel.__doc__)
 def rpa_kernel(self, **kwargs):
     '''Monkey-patched TDHF/TDDFT kernel for CVS'''
-    if 'core_idx' in kwargs.keys():
-        core_idx = kwargs.pop('core_idx')
-    elif hasattr(self, 'core_idx'):
-        core_idx = self.core_idx
-    else:
-        core_idx = None
-
-    if 'no_fxc' in kwargs.keys():
-        no_fxc = kwargs.pop('no_fxc')
-    elif hasattr(self, 'no_fxc'):
-        no_fxc = self.no_fxc
-    else:
-        no_fxc = False
-
-    if 'direct_diag' in kwargs.keys():
-        direct_diag = kwargs.pop('direct_diag')
-    elif hasattr(self, 'direct_diag'):
-        direct_diag = self.direct_diag
-    else:
-        direct_diag = False
-
-    if core_idx is not None:
-        core_valence(self, core_idx=core_idx)
-    if no_fxc:
-        self.get_ab = get_ab_no_fxc_ghf
-        if not direct_diag:
-            pyscf.lib.logger.warn(
-                self, 'No fxc requested. Using direct diagonalization.')
-            direct_diag = True
+    no_fxc, direct_diag = prepare_kernel(self, kwargs, core_valence)
     if direct_diag:
-        return direct_diag_rpa_kernel(self, **kwargs)
-    else:
-        return self._old_kernel(**kwargs)
+        return direct_diag_rpa_kernel(self, no_fxc=no_fxc, **kwargs)
+    return self._old_kernel(**kwargs)
 
 
 @pyscf.lib.with_doc(TDA.kernel.__doc__)
 def tda_kernel(self, **kwargs):
     '''Monkey-patched TDA kernel for CVS'''
-    if 'core_idx' in kwargs.keys():
-        core_idx = kwargs.pop('core_idx')
-    elif hasattr(self, 'core_idx'):
-        core_idx = self.core_idx
-    else:
-        core_idx = None
-
-    if 'no_fxc' in kwargs.keys():
-        no_fxc = kwargs.pop('no_fxc')
-    elif hasattr(self, 'no_fxc'):
-        no_fxc = self.no_fxc
-    else:
-        no_fxc = False
-
-    if 'direct_diag' in kwargs.keys():
-        direct_diag = kwargs.pop('direct_diag')
-    elif hasattr(self, 'direct_diag'):
-        direct_diag = self.direct_diag
-    else:
-        direct_diag = False
-
-    if core_idx is not None:
-        core_valence(self, core_idx=core_idx)
-    if no_fxc:
-        self.get_ab = get_ab_no_fxc_ghf
-        if not direct_diag:
-            pyscf.lib.logger.warn(
-                self, 'No fxc requested. Using direct diagonalization.')
-            direct_diag = True
+    no_fxc, direct_diag = prepare_kernel(self, kwargs, core_valence)
     if direct_diag:
-        return direct_diag_tda_kernel(self, **kwargs)
-    else:
-        return self._old_kernel(**kwargs)
+        return direct_diag_tda_kernel(self, no_fxc=no_fxc, **kwargs)
+    return self._old_kernel(**kwargs)
 
 
-TDHF.core_valence = core_valence
-TDHF._old_kernel = TDHF.kernel
-TDHF.kernel = rpa_kernel
-
-CasidaTDDFT.core_valence = core_valence
-CasidaTDDFT._old_kernel = CasidaTDDFT.kernel
-CasidaTDDFT.kernel = rpa_kernel
-
-TDA.core_valence = core_valence
-TDA._old_kernel = TDA.kernel
-TDA.kernel = tda_kernel
+patch_td_class(TDHF, rpa_kernel, core_valence)
+patch_td_class(CasidaTDDFT, rpa_kernel, core_valence)
+patch_td_class(TDA, tda_kernel, core_valence)
