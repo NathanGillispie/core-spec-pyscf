@@ -11,7 +11,7 @@ on:
       - $default-branch
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:

@@ -9,6 +9,19 @@ include-package-data = true
 where = ["."]
 include = ["pyscf.*"]
 
+[tool.pytest.ini_options]
+testpaths = ["pyscf"]
+addopts = [
+    "-s",
+    "--cov=pyscf.cvs",
+    "--cov=pyscf.qr",
+    "--cov=pyscf.zora",
+    "--cov-report=term-missing",
+]
+
+[tool.coverage.run]
+omit = ["*/test/*"]
+
 [project]
 name = "core-spec-pyscf"
 version = "0.4"
