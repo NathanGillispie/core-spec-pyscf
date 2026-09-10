@@ -32,7 +32,7 @@ authors = [
 description = "PySCF extension for easier access to core-level spectroscopy calculations"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = ["pyscf>=2.4"]
+dependencies = ["pyscf>=2.7"]
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 classifiers = [

@@ -18,9 +18,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: PySCF 2.4
+          - name: PySCF 2.7
             python_version: '3.10'
-            pyscf_requirement: 'pyscf==2.4.*'
+            pyscf_requirement: 'pyscf==2.7.*'
             pytest_args: '--ignore=pyscf/cvs'
           - name: PySCF 2.10
             python_version: '3.10'

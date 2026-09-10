@@ -66,7 +66,7 @@ is done in its hermitian form, assuming $(\mathbf{A}-\mathbf{B})$ and $(\mathbf{
 
 ## Dependencies
 
-This project requires nothing more than PySCF **>=2.4** to run. Features vary by
+This project requires nothing more than PySCF **>=2.7** to run. Features vary by
 version. Ordinary QR and ZORA energies are supported in this version.
 
 - **>=2.10**: QR calculations using frozen orbitals and the `pyscf.cvs` module require
@@ -156,7 +156,7 @@ Excited-to-excited state properties are computed with the `QR` driver in
 `pyscf.qr`. Import the module, run a linear-response calculation, then
 construct a `QR` object from the resulting TDSCF object:
 
-QR without frozen orbitals is supported with PySCF 2.4 and newer. QR
+QR without frozen orbitals is supported with PySCF 2.7 and newer. QR
 calculations using frozen orbitals require PySCF 2.10 or newer.
 
 ```py
