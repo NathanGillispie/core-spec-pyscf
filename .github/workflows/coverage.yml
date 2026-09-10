@@ -15,7 +15,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - name: Set up Python 3.13
+    - name: Set up Python 3.12
       uses: actions/setup-python@v5
       with:
         python-version: '3.12'
@@ -40,6 +40,6 @@ jobs:
     - name: Test and generate coverage
       run: |
         export PYSCF_EXT_PATH=$(pwd):$PYSCF_EXT_PATH
-        python -m pytest --cov-report=json
+        python -s -m pytest --cov-report=json
     - name: Update Coverage Badge
       uses: we-cli/coverage-badge-action@8a0b6ee05f6dd0f294089cbe7a848452a2b43eef
