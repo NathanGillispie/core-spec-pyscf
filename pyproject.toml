@@ -32,7 +32,7 @@ authors = [
 description = "PySCF extension for easier access to core-level spectroscopy calculations"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = ["pyscf>=2.14"]
+dependencies = ["pyscf>=2.4"]
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 classifiers = [
@@ -43,6 +43,9 @@ classifiers = [
   'Operating System :: Unix',
   'Operating System :: MacOS',
 ]
+
+[project.optional-dependencies]
+cvs = ["pyscf>=2.10"]
 
 [project.urls]
 Homepage = "https://github.com/NathanGillispie/core-spec-pyscf"

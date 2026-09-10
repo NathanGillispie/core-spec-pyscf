@@ -13,6 +13,7 @@ from pyscf.qr.manifold import gxc_tensor_shape
 from pyscf.qr.rhf import Gxc
 from pyscf.qr.uhf import UQR
 from pyscf.qr.ghf import GQR
+from pyscf.qr.test.common import requires_frozen
 
 
 def test_plugin_import():
@@ -57,6 +58,7 @@ def test_qr_runs_lr_if_needed(he_mf):
     assert len(qr.manifold_n.e) == 1
 
 
+@requires_frozen
 def test_qr_two_manifolds_shared_reference(he_mf):
     td1 = RPA(he_mf).set(nstates=1)
     td1.kernel()

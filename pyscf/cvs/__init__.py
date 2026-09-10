@@ -21,7 +21,15 @@ Direct diagonalization and dropping :math:`f_\\text{xc}`::
     td.kernel()
 '''
 
+from inspect import signature
+
 from pyscf.tdscf.rhf import TDBase
+
+if 'frozen' not in signature(TDBase.__init__).parameters:
+    raise ImportError(
+        'pyscf.cvs requires PySCF TDSCF frozen-orbital support '
+        '(PySCF >= 2.10). Install core-spec-pyscf[cvs].')
+
 from pyscf.cvs.td import CVS, cvs
 
 TDBase.cvs = cvs

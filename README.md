@@ -41,7 +41,7 @@ were needed for convenient core-level spectroscopy:
    Resonant-Inelastic X-ray Scattering calculations.
 
 5. **Core-valence separation**: this approximation was not previously implemented.
-   As of PySCF 2.14, this is supported indirectly through the `frozen` attribute.
+   As of PySCF 2.10, this is supported indirectly through the `frozen` attribute.
    This code still adds a `CVS` mixin for specifying core orbitals via index or energy window.
 
 ### Details
@@ -63,6 +63,19 @@ is done in its hermitian form, assuming $(\mathbf{A}-\mathbf{B})$ and $(\mathbf{
   TDSCF objects, solves a Casida-like equation for the off-diagonal blocks of the
   excited-to-excited transition density matrix (2TDM), and exposes transition
   dipole moments and oscillator strengths.
+
+## Dependencies
+
+This project requires nothing more than PySCF **>=2.4** to run. Features vary by
+version. Ordinary QR and ZORA energies are supported in this version.
+
+- **>=2.10**: QR calculations using frozen orbitals and the `pyscf.cvs` module require
+  PySCF 2.10 or newer. On older versions, importing `pyscf.cvs` raises `ImportError`.
+- **master/>=2.15**: ZORA GHF/GKS nuclear gradients and geometry optimization require PySCF's
+  generalized nuclear-gradient implementation from the current development
+  branch or 2.15 when available. Older versions raise `NotImplementedError`.
+
+The QR example requires `matplotlib` to plot the data.
 
 ## Usage
 
@@ -118,6 +131,9 @@ tdobj = TDDFT(mf).cvs(core_idx=[0, 1, 2])
 tdobj.nstates = 80
 tdobj.kernel()
 ```
+The CVS module requires PySCF's TDSCF frozen-orbital support, available in
+PySCF 2.10 and newer. On older versions, importing `pyscf.cvs` raises
+`ImportError`.
 For unrestricted references, excitations out of the alpha and beta orbitals are
 specified as a tuple, `([0,1], [0,1])`. Extra virtuals may be frozen on one
 spin so both spins keep the same number of active MOs (required by PySCF's UHF
@@ -139,6 +155,9 @@ tdobj.kernel()
 Excited-to-excited state properties are computed with the `QR` driver in
 `pyscf.qr`. Import the module, run a linear-response calculation, then
 construct a `QR` object from the resulting TDSCF object:
+
+QR without frozen orbitals is supported with PySCF 2.4 and newer. QR
+calculations using frozen orbitals require PySCF 2.10 or newer.
 
 ```py
 from pyscf import gto, dft
@@ -213,10 +232,14 @@ The recommended installation method is to use `pip` with some kind of virtual
 environment (venv, conda, etc.)
 
 ### Pip
-This software has been uploaded to
-[PyPI](https://pypi.org/project/core-spec-pyscf/), so it can be installed with
+This software is avilable in [PyPI](https://pypi.org/project/core-spec-pyscf/),
+so it can be installed with
 ```sh
 pip install core-spec-pyscf
+```
+To request the CVS constraint (PySCF>=2.10) explicitly:
+```sh
+pip install "core-spec-pyscf[cvs]"
 ```
 Alternatively, install the latest version from the
 [GitHub](https://github.com/NathanGillispie/core-spec-pyscf) repo with
