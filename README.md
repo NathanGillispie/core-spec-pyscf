@@ -52,6 +52,9 @@ de = mf.Gradients().kernel()
 mol_eq = mf.Gradients().optimizer().kernel()
 ```
 When composing with density fitting, apply `.zora()` last (`mf.density_fit().zora()`).
+GHF/GKS nuclear gradients and geometry optimization require PySCF's generalized
+nuclear-gradient support. On older PySCF versions, those operations raise
+`NotImplementedError`; RHF/RKS/UHF/UKS gradients remain available.
 
 Spin–orbit MP-ZORA is available on GHF/GKS:
 ```py
@@ -155,7 +158,7 @@ pip install git+https://github.com/NathanGillispie/core-spec-pyscf.git
 If using `conda`, use the `pip` installed in your environment. Some call this "bad practice", I call it time spent *not* running core-valence separated TDDFT calculations.
 
 ### Source build
-This should only be done if you know what you're doing. After [installing and building](https://pyscf.org/user/install.html#build-from-source) PySCF, add the `pyscf` dir of this repo to the `PYSCF_EXT_PATH` environment variable. But be warned, this variable causes problems for pip installations of PySCF.
+This should only be done if you know what you're doing. After [installing and building](https://pyscf.org/user/install.html#build-from-source) PySCF, add the root of this repo to the `PYSCF_EXT_PATH` environment variable. But be warned, this variable causes problems for pip installations of PySCF.
 
 ### Development mode
 `pip` has a handy feature called editable installations. In a virtual environment with PySCF and its dependencies, run

@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=77.0.3", "pyscf>=2.4.0"]
+requires = ["setuptools>=77.0.3"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
@@ -8,6 +8,7 @@ include-package-data = true
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["pyscf.*"]
+exclude = ["pyscf.*.test", "pyscf.*.test.*"]
 
 [tool.pytest.ini_options]
 testpaths = ["pyscf"]
@@ -31,6 +32,7 @@ authors = [
 description = "PySCF extension for easier access to core-level spectroscopy calculations"
 readme = "README.md"
 requires-python = ">=3.10"
+dependencies = ["pyscf>=2.14"]
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 classifiers = [

@@ -21,6 +21,14 @@ Tr(D ∂(i H_SO)/∂R) is injected through extra_force.
 import numpy
 from pyscf import gto, lib
 from pyscf.grad import rhf as rhf_grad
+from pyscf.scf import ghf as scf_ghf
+
+try:
+    from pyscf.grad import ghf as _ghf_grad
+    from pyscf.grad import gks as _gks_grad
+except ImportError:
+    _ghf_grad = None
+    _gks_grad = None
 
 from . import integrals
 
@@ -117,6 +125,12 @@ def make_grad_object(mf):
     '''Wrap the vacuum Gradients object with ZORA hcore / SO contributions.'''
     if isinstance(mf, rhf_grad.GradientsBase):
         mf = mf.base
+
+    if (isinstance(mf, scf_ghf.GHF)
+            and (_ghf_grad is None or _gks_grad is None)):
+        raise NotImplementedError(
+            'ZORA GHF/GKS nuclear gradients require PySCF generalized '
+            'nuclear-gradient support (pyscf.grad.ghf and pyscf.grad.gks).')
 
     from pyscf.zora.zora import ZORA_SCF
     assert isinstance(mf, ZORA_SCF)

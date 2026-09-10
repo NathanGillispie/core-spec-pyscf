@@ -86,6 +86,15 @@ def test_gradients_alias():
     assert np.allclose(g1.kernel(), g2.kernel())
 
 
+def test_generalized_gradients_require_pyscf_support(monkeypatch):
+    from pyscf.zora import grad as zora_grad
+
+    monkeypatch.setattr(zora_grad, '_ghf_grad', None)
+    mf = pyscf.scf.GHF(make_hf_mol()).zora(grid_level=GRAD_GRID_LEVEL)
+    with pytest.raises(NotImplementedError, match='generalized'):
+        mf.nuc_grad_method()
+
+
 def test_idempotent_updates_options():
     mol = make_hf_mol()
     mf = pyscf.scf.RHF(mol).zora(grid_level=8)

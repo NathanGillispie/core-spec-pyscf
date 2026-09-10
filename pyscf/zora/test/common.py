@@ -21,12 +21,15 @@ CONV_PARAMS = {
 
 try:
     from pyscf.grad import ghf as _ghf_grad  # noqa: F401
+    from pyscf.grad import gks as _gks_grad  # noqa: F401
 except ImportError:
     _ghf_grad = None
+    _gks_grad = None
 
 requires_ghf_grad = pytest.mark.skipif(
-    _ghf_grad is None,
-    reason='GHF/GKS nuclear gradients require pyscf.grad.ghf',
+    _ghf_grad is None or _gks_grad is None,
+    reason='GHF/GKS nuclear gradients require PySCF generalized '
+           'nuclear-gradient support',
 )
 
 
