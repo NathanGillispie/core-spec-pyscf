@@ -11,6 +11,15 @@ Wrap a TDSCF object with :meth:`cvs` (assign the return value)::
 orbitals are frozen). The SCF ``mo_coeff`` / ``mo_occ`` / ``mo_energy`` arrays
 and ``mol.nelec`` are left unchanged.
 
+Select occupied core orbitals by an inclusive MO-energy window::
+
+    td = TDA(mf).cvs(core_window=(-20.0, -10.0))
+
+For UHF/UKS, one window is applied to both spins, or separate alpha and beta
+windows can be supplied::
+
+    td = TDA(mf).cvs(core_window=((-20.0, -10.0), (-19.0, -9.0)))
+
 For UHF/UKS, pass a ``(alpha, beta)`` pair::
 
     td = TDA(mf).cvs(core_idx=([0, 1], [0, 1]))

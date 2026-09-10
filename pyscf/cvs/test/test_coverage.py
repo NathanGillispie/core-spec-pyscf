@@ -60,6 +60,64 @@ def test_core_valence_int_and_missing():
     assert td.core_idx == [0]
 
 
+def test_core_window_restricted_is_lazy_and_matches_indices():
+    mol = pyscf.M(atom='Be 0 0 0', basis='sto-3g', verbose=0)
+    mf = pyscf.scf.RHF(mol).run()
+    occ = numpy.where(mf.mo_occ != 0)[0]
+    energy = mf.mo_energy[occ[0]]
+    window = (energy - 1e-10, energy + 1e-10)
+
+    td = TDA(mf).cvs(core_window=window)
+    assert td.core_idx is None
+    td.core_valence()
+    assert td.core_idx == [int(occ[0])]
+    assert td.frozen == [int(i) for i in occ[1:]]
+
+    td.kernel(nstates=1)
+    td_idx = TDA(mf).cvs(core_idx=[int(occ[0])])
+    td_idx.kernel(nstates=1)
+    assert numpy.allclose(td.e, td_idx.e)
+
+
+def test_core_window_unrestricted_shared_and_spin_specific():
+    mf = _he('UHF')
+    occ_a = numpy.where(mf.mo_occ[0] != 0)[0]
+    occ_b = numpy.where(mf.mo_occ[1] != 0)[0]
+    window = (
+        min(mf.mo_energy[0][occ_a[0]], mf.mo_energy[1][occ_b[0]]) - 1e-10,
+        max(mf.mo_energy[0][occ_a[0]], mf.mo_energy[1][occ_b[0]]) + 1e-10,
+    )
+    td = TDA(mf).cvs(core_window=window)
+    td.core_valence()
+    assert td.core_idx == ([int(occ_a[0])], [int(occ_b[0])])
+
+    spin_window = (
+        (mf.mo_energy[0][occ_a[0]] - 1e-10,
+         mf.mo_energy[0][occ_a[0]] + 1e-10),
+        (mf.mo_energy[1][occ_b[0]] - 1e-10,
+         mf.mo_energy[1][occ_b[0]] + 1e-10),
+    )
+    td = TDA(mf).cvs(core_window=spin_window)
+    td.core_valence()
+    assert td.core_idx == ([int(occ_a[0])], [int(occ_b[0])])
+
+
+def test_core_window_errors():
+    mf = _he('RHF')
+    td = TDA(mf).cvs()
+    with pytest.raises(ValueError, match='either core_idx or core_window'):
+        td.core_valence(core_idx=[0], core_window=(-1, 1))
+    with pytest.raises(ValueError, match='emin <= emax'):
+        td.core_valence(core_window=(1, -1))
+    with pytest.raises(ValueError, match='does not contain an occupied'):
+        td.core_valence(core_window=(100, 101))
+
+    mf_u = _he('UHF')
+    td_u = TDA(mf_u).cvs()
+    with pytest.raises(ValueError, match='UHF core_window'):
+        td_u.core_valence(core_window=(1, 2, 3))
+
+
 def test_core_valence_unoccupied_warns():
     mf = _he('RHF')
     td = TDA(mf).cvs()

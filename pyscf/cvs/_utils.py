@@ -10,15 +10,84 @@ def _as_index_list(idx):
     return [int(i) for i in numpy.atleast_1d(idx)]
 
 
-def core_valence_restricted(tdobj, core_idx=None):
+def _as_energy_window(window):
+    if not hasattr(window, '__len__') or len(window) != 2:
+        raise ValueError('core_window must be a (emin, emax) pair')
+    emin, emax = (float(x) for x in window)
+    if numpy.isnan(emin) or numpy.isnan(emax) or emin > emax:
+        raise ValueError('core_window must satisfy emin <= emax')
+    return emin, emax
+
+
+def _core_indices_from_window(mo_energy, mo_occ, window):
+    if mo_energy is None:
+        raise RuntimeError(
+            'Orbital energies are required for core_window selection. '
+            'Run the SCF calculation first.')
+    mo_energy = numpy.asarray(mo_energy)
+    mo_occ = numpy.asarray(mo_occ)
+    if mo_energy.ndim != 1 or mo_occ.ndim != 1:
+        raise ValueError('Restricted core_window selection requires 1D MO arrays')
+    if mo_energy.size != mo_occ.size:
+        raise ValueError('MO energy and occupation arrays have different sizes')
+
+    emin, emax = _as_energy_window(window)
+    occ_idx = numpy.where(mo_occ != 0)[0]
+    core_idx = occ_idx[(mo_energy[occ_idx] >= emin)
+                       & (mo_energy[occ_idx] <= emax)]
+    if core_idx.size == 0:
+        raise ValueError(
+            f'core_window={window!r} does not contain an occupied orbital')
+    return [int(i) for i in core_idx]
+
+
+def _is_energy_window(window):
+    return (hasattr(window, '__len__') and len(window) == 2
+            and all(numpy.isscalar(x) for x in window))
+
+
+def _unrestricted_energy_windows(window):
+    if _is_energy_window(window):
+        normalized = _as_energy_window(window)
+        return normalized, normalized
+    if (hasattr(window, '__len__') and len(window) == 2
+            and all(_is_energy_window(x) for x in window)):
+        return _as_energy_window(window[0]), _as_energy_window(window[1])
+    raise ValueError(
+        'UHF core_window must be (emin, emax) or '
+        '((emin_alpha, emax_alpha), (emin_beta, emax_beta))')
+
+
+def _core_indices_unrestricted_from_window(mo_energy, mo_occ, window):
+    if mo_energy is None:
+        raise RuntimeError(
+            'Orbital energies are required for core_window selection. '
+            'Run the SCF calculation first.')
+    if len(mo_energy) != 2 or len(mo_occ) != 2:
+        raise ValueError('Unrestricted core_window selection requires two spin arrays')
+    windows = _unrestricted_energy_windows(window)
+    return tuple(
+        _core_indices_from_window(mo_energy[spin], mo_occ[spin], windows[spin])
+        for spin in (0, 1))
+
+
+def core_valence_restricted(tdobj, core_idx=None, core_window=None):
     '''Map core orbital indices onto ``tdobj.frozen`` for restricted/GHF refs.
 
     Occupied orbitals that are not listed in *core_idx* are frozen. The SCF
     ``mo_coeff`` / ``mo_occ`` / ``mo_energy`` arrays and ``mol.nelec`` are not
     modified.
     '''
+    if core_idx is not None and core_window is not None:
+        raise ValueError('Specify either core_idx or core_window, not both')
     if core_idx is None:
-        core_idx = getattr(tdobj, 'core_idx', None)
+        if core_window is None:
+            core_window = getattr(tdobj, 'core_window', None)
+        if core_window is not None:
+            core_idx = _core_indices_from_window(
+                tdobj._scf.mo_energy, tdobj._scf.mo_occ, core_window)
+        else:
+            core_idx = getattr(tdobj, 'core_idx', None)
     if core_idx is None:
         raise RuntimeError('Core orbitals not specified')
 
@@ -54,7 +123,7 @@ def _pad_frozen_uhf(mo_occ, frozen_a, frozen_b):
     return frozen_a, frozen_b
 
 
-def core_valence_unrestricted(tdobj, core_idx=None):
+def core_valence_unrestricted(tdobj, core_idx=None, core_window=None):
     '''Map per-spin core indices onto ``tdobj.frozen`` for UHF/UKS refs.
 
     *core_idx* must be ``(idx_alpha, idx_beta)``. Occupied orbitals of each
@@ -63,8 +132,16 @@ def core_valence_unrestricted(tdobj, core_idx=None):
     (required by PySCF's UHF Davidson solver). The SCF orbitals are not
     modified.
     '''
+    if core_idx is not None and core_window is not None:
+        raise ValueError('Specify either core_idx or core_window, not both')
     if core_idx is None:
-        core_idx = getattr(tdobj, 'core_idx', None)
+        if core_window is None:
+            core_window = getattr(tdobj, 'core_window', None)
+        if core_window is not None:
+            core_idx = _core_indices_unrestricted_from_window(
+                tdobj._scf.mo_energy, tdobj._scf.mo_occ, core_window)
+        else:
+            core_idx = getattr(tdobj, 'core_idx', None)
     if core_idx is None:
         raise RuntimeError(
             'Core orbitals not specified. Use the core_idx attribute.')

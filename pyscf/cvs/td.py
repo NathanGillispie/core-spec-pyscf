@@ -6,6 +6,10 @@ Typical usage::
     td = TDA(mf).cvs(core_idx=[0, 1, 2])
     td.kernel()
 
+An inclusive MO-energy window can be used instead of explicit indices::
+
+    td = TDA(mf).cvs(core_window=(-20.0, -10.0))
+
 Assign the return value (``td = td.cvs(...)``). Importing this module attaches
 ``.cvs`` to :class:`pyscf.tdscf.rhf.TDBase`.
 '''
@@ -59,18 +63,20 @@ class CVS:
     '''Mixin that adds core-valence separation, no_fxc, and direct diagonalization.'''
 
     __name_mixin__ = 'CVS'
-    _keys = {'core_idx', 'no_fxc', 'direct_diag'}
+    _keys = {'core_idx', 'core_window', 'no_fxc', 'direct_diag'}
 
-    def __init__(self, td, core_idx=None, no_fxc=False, direct_diag=False):
+    def __init__(self, td, core_idx=None, core_window=None, no_fxc=False,
+                 direct_diag=False):
         self.__dict__.update(td.__dict__)
         self.core_idx = core_idx
+        self.core_window = core_window
         self.no_fxc = no_fxc
         self.direct_diag = direct_diag
 
     def undo_cvs(self):
         '''Remove the CVS mixin.'''
         obj = lib.view(self, lib.drop_class(self.__class__, CVS))
-        for key in ('core_idx', 'no_fxc', 'direct_diag'):
+        for key in ('core_idx', 'core_window', 'no_fxc', 'direct_diag'):
             if hasattr(obj, key):
                 delattr(obj, key)
         return obj
@@ -79,14 +85,20 @@ class CVS:
         super().dump_flags(verbose)
         log = logger.new_logger(self, verbose)
         log.info('core_idx = %s', self.core_idx)
+        log.info('core_window = %s', self.core_window)
         log.info('no_fxc = %s', self.no_fxc)
         log.info('direct_diag = %s', self.direct_diag)
         return self
 
-    def core_valence(self, core_idx=None):
+    def core_valence(self, core_idx=None, core_window=None):
+        if core_idx is not None:
+            self.core_window = None
+        elif core_window is not None:
+            self.core_window = core_window
+            self.core_idx = None
         if is_uhf_td(self):
-            return core_valence_unrestricted(self, core_idx)
-        return core_valence_restricted(self, core_idx)
+            return core_valence_unrestricted(self, core_idx, core_window)
+        return core_valence_restricted(self, core_idx, core_window)
 
     def get_ab(self, mf=None, frozen=None):
         if mf is None:
@@ -98,16 +110,28 @@ class CVS:
             return ghf_get_ab(mf, frozen=frozen)
         return super().get_ab(mf=mf, frozen=frozen)
 
-    def kernel(self, x0=None, nstates=None, core_idx=None, no_fxc=None,
-               direct_diag=None):
-        if core_idx is None:
+    def kernel(self, x0=None, nstates=None, core_idx=None, core_window=None,
+               no_fxc=None, direct_diag=None):
+        if core_idx is not None and core_window is not None:
+            raise ValueError('Specify either core_idx or core_window, not both')
+        if core_idx is not None:
+            self.core_window = None
+        elif core_window is not None:
+            self.core_window = core_window
+        elif core_window is None:
+            core_window = self.core_window
+        if core_window is not None:
+            core_idx = None
+        elif core_idx is None:
             core_idx = self.core_idx
         if no_fxc is None:
             no_fxc = self.no_fxc
         if direct_diag is None:
             direct_diag = self.direct_diag
 
-        if core_idx is not None:
+        if core_window is not None:
+            self.core_valence(core_window=core_window)
+        elif core_idx is not None:
             self.core_valence(core_idx)
         if no_fxc and not direct_diag:
             logger.warn(self, 'No fxc requested. Using direct diagonalization.')
@@ -142,7 +166,7 @@ class CVS:
         return fn(self, x0=x0, nstates=nstates, no_fxc=no_fxc)
 
 
-def cvs(td, core_idx=None, no_fxc=None, direct_diag=None):
+def cvs(td, core_idx=None, core_window=None, no_fxc=None, direct_diag=None):
     '''Enable CVS / no_fxc / direct diagonalization on a TDSCF object.
 
     Args:
@@ -150,6 +174,8 @@ def cvs(td, core_idx=None, no_fxc=None, direct_diag=None):
 
     Kwargs:
         core_idx : occupied MO indices to excite from (UHF: ``(alpha, beta)``)
+        core_window : ``(emin, emax)`` energy window for occupied core MOs
+            (UHF also accepts separate alpha and beta windows)
         no_fxc : bool
             Drop the XC kernel; always uses direct diagonalization.
         direct_diag : bool
@@ -158,9 +184,14 @@ def cvs(td, core_idx=None, no_fxc=None, direct_diag=None):
     Returns:
         The wrapped TD object. Assign the result: ``td = td.cvs(...)``.
     '''
+    if core_idx is not None and core_window is not None:
+        raise ValueError('Specify either core_idx or core_window, not both')
     if isinstance(td, CVS):
         if core_idx is not None:
             td.core_valence(core_idx)
+        elif core_window is not None:
+            td.core_window = core_window
+            td.core_idx = None
         if no_fxc is not None:
             td.no_fxc = no_fxc
         if direct_diag is not None:
@@ -169,6 +200,7 @@ def cvs(td, core_idx=None, no_fxc=None, direct_diag=None):
 
     obj = CVS(td,
               core_idx=core_idx,
+              core_window=core_window,
               no_fxc=bool(no_fxc),
               direct_diag=bool(direct_diag))
     obj = lib.set_class(obj, (CVS, td.__class__))

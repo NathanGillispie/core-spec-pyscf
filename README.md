@@ -131,14 +131,24 @@ tdobj = TDDFT(mf).cvs(core_idx=[0, 1, 2])
 tdobj.nstates = 80
 tdobj.kernel()
 ```
+Alternatively, select occupied core orbitals using an inclusive MO-energy
+window. Virtual orbitals are not selected by this window and remain active:
+```py
+tdobj = TDDFT(mf).cvs(core_window=(-20.0, -10.0))
+tdobj.kernel()
+```
 The CVS module requires PySCF's TDSCF frozen-orbital support, available in
 PySCF 2.10 and newer. On older versions, importing `pyscf.cvs` raises
 `ImportError`.
+
 For unrestricted references, excitations out of the alpha and beta orbitals are
 specified as a tuple, `([0,1], [0,1])`. Extra virtuals may be frozen on one
 spin so both spins keep the same number of active MOs (required by PySCF's UHF
 Davidson solver). You can also assign `tdobj.frozen` directly using the usual
 PySCF convention.
+
+For UHF/UKS, `core_window=(emin, emax)` applies to both spins. Separate windows
+can be supplied as `((emin_alpha, emax_alpha), (emin_beta, emax_beta))`.
 
 To disable the $f_\text{xc}$ term, pass `no_fxc=True`. The same syntax is used
 for direct diagonalization (`direct_diag`). Direct diagonalization is always
