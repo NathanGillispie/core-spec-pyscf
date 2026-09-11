@@ -7,7 +7,6 @@ import pytest
 from pyscf import gto, lib, scf
 from pyscf.tdscf import RPA, TDA
 
-import pyscf.cvs
 import pyscf.qr
 from pyscf.qr import Manifold, QR
 from pyscf.qr.manifold import gxc_tensor_shape
@@ -74,8 +73,11 @@ def test_qr_two_manifolds_shared_reference(he_mf):
 @requires_frozen
 @pytest.mark.parametrize('precompute_gxc', [False, True])
 def test_qr_two_cvs_tda_manifolds_match_explicit_frozen(precompute_gxc):
+    import pyscf.cvs
+
     mol = gto.M(atom='Be 0 0 0', basis='sto-3g', verbose=0)
-    mf = scf.RKS(mol, xc='LDA')
+    mf = scf.RKS(mol)
+    mf.xc = 'LDA'
     mf.grids.level = 1
     mf.kernel()
 
