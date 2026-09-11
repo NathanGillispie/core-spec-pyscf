@@ -119,6 +119,10 @@ class Manifold:
             raise ValueError(
                 f'len(xy)={len(self.xy)} does not match len(e)={len(self.e)}')
 
+        if len(self.xy) == 0:
+            raise ValueError(
+                'No excited states found in tdobj. Did you freeze all the orbitals?')
+
         has_y = {isinstance(y, numpy.ndarray) for x, y in self.xy}
         if len(has_y) != 1:
             raise ValueError('All states in a manifold must be TDA or RPA.')
