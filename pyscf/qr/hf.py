@@ -1,5 +1,7 @@
 '''Base quadratic response driver.'''
 
+import numpy
+
 from pyscf import lib, scf
 
 from pyscf.qr import chkfile as qr_chkfile
@@ -201,9 +203,22 @@ class QR(lib.StreamObject):
     @staticmethod
     def _infer_response_type(manifold):
         _, y0 = manifold.xy[0]
-        if isinstance(y0, (int, tuple)):
+        # PySCF uses scalar 0 for RHF/GHF TDA and (0, 0) for UHF TDA.
+        # Zero-dimensional arrays are accepted as a compatibility fallback.
+        # RPA Y vectors are arrays with at least one dimension.  CVS wraps
+        # TDA objects without changing this convention, so infer from the
+        # amplitude rather than from the wrapper class.
+        if isinstance(y0, tuple):
+            if all(numpy.isscalar(item) and item == 0 for item in y0):
+                return 'tda'
+            if all(isinstance(item, numpy.ndarray) for item in y0):
+                return 'rpa'
+        elif numpy.isscalar(y0) and y0 == 0:
             return 'tda'
-        if hasattr(y0, 'shape'):
+        elif (isinstance(y0, numpy.ndarray) and y0.ndim == 0
+              and y0.item() == 0):
+            return 'tda'
+        elif isinstance(y0, numpy.ndarray):
             return 'rpa'
         raise ValueError('Could not infer response type from xy!')
 

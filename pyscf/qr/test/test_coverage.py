@@ -125,6 +125,12 @@ def test_base_qr_error_paths():
         BaseQR._infer_response_type(
             SimpleNamespace(xy=((numpy.zeros((1, 1)), object()),)),
         )
+    for y in (0, numpy.int64(0), numpy.asarray(0), (0, 0)):
+        assert BaseQR._infer_response_type(
+            SimpleNamespace(xy=((numpy.zeros((1, 1)), y),))) == 'tda'
+    assert BaseQR._infer_response_type(
+        SimpleNamespace(xy=((numpy.zeros((1, 1)),
+                             numpy.zeros((1, 1))),))) == 'rpa'
     with pytest.raises(NotImplementedError, match='_init_gxc'):
         base._init_gxc()
     with pytest.raises(NotImplementedError, match='_build_intermediates'):
@@ -159,7 +165,7 @@ def test_manifold_edge_cases():
     assert encoded[0][1] == encoded[1][1] == 0
     assert encoded[0][0] == encoded[1][0] == x.tolist()
     with pytest.raises(ValueError, match='Unknown type'):
-        _encode_xy(((x, None),))
+        _encode_xy(((x, object()),))
 
     with pytest.raises(ValueError, match='len'):
         Manifold(

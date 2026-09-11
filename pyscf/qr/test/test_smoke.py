@@ -7,6 +7,7 @@ import pytest
 from pyscf import gto, lib, scf
 from pyscf.tdscf import RPA, TDA
 
+import pyscf.cvs
 import pyscf.qr
 from pyscf.qr import Manifold, QR
 from pyscf.qr.manifold import gxc_tensor_shape
@@ -68,6 +69,36 @@ def test_qr_two_manifolds_shared_reference(he_mf):
     assert qr.manifold_n is not qr.manifold_m
     assert len(qr.manifold_n.e) == 1
     assert len(qr.manifold_m.e) == 1
+
+
+@requires_frozen
+@pytest.mark.parametrize('precompute_gxc', [False, True])
+def test_qr_two_cvs_tda_manifolds_match_explicit_frozen(precompute_gxc):
+    mol = gto.M(atom='Be 0 0 0', basis='sto-3g', verbose=0)
+    mf = scf.RKS(mol, xc='LDA')
+    mf.grids.level = 1
+    mf.kernel()
+
+    td_n = TDA(mf).cvs(core_idx=[0]).set(nstates=1)
+    td_m = TDA(mf).cvs(core_idx=[0]).set(nstates=1)
+    td_n.kernel()
+    td_m.kernel()
+    assert td_n.frozen == [1]
+    assert td_m.frozen == [1]
+
+    qr_cvs = QR(td_n, td_m, precompute_gxc=precompute_gxc)
+    if precompute_gxc:
+        qr_cvs.kernel()
+    assert qr_cvs.response_type == 'tda'
+
+    td_frozen = TDA(mf, frozen=[1]).set(nstates=1)
+    td_frozen.kernel()
+    qr_frozen = QR(td_frozen, precompute_gxc=precompute_gxc)
+    if precompute_gxc:
+        qr_frozen.kernel()
+
+    numpy.testing.assert_allclose(qr_cvs.get_2tdm(0, 0),
+                                  qr_frozen.get_2tdm(0, 0))
 
 
 def test_qr_rejects_tda_rpa_mix(he_mf):
@@ -212,7 +243,7 @@ def test_get_aligned_xy_padding(he_mf):
         mo_occ=mo_occ,
         occ_idx=occ_idx,
         e=numpy.array([0.1]),
-        xy=((numpy.ones((1, nvirt)), None), ),
+        xy=((numpy.ones((1, nvirt)), 0), ),
     )
     x_pad, y_pad = man.get_aligned_xy(0)
     assert x_pad.shape == (2, nvirt)
@@ -232,7 +263,7 @@ def test_manifold_call(he_mf):
         mo_occ=mo_occ,
         occ_idx=occ_idx,
         e=e,
-        xy=((numpy.ones((1, nvirt)), None), ),
+        xy=((numpy.ones((1, nvirt)), 0), ),
     )
     e_out, (x, y) = man(0)
     assert e_out == 0.42
@@ -280,7 +311,7 @@ def test_manifold_from_tdobj(he_mf):
     manifold = Manifold.from_tdobj(td)
     assert manifold.e.shape == (1, )
     assert len(manifold.xy) == 1
-    assert manifold.xy[0][1] is not None
+    assert isinstance(manifold.xy[0][1], numpy.ndarray)
     assert len(manifold.occ_idx) == 1
     assert manifold.mol is he_mf.mol
     assert manifold.mo_coeff is he_mf.mo_coeff
