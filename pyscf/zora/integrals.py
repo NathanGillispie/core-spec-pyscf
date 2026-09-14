@@ -202,8 +202,11 @@ def eval_zora_T_kernel_deriv(mol, grid, kernel, max_memory=2000, dveff=None):
                                         max_memory=max_memory):
         ip1 = ip0 + weights.shape[0]
         fac = dveff[:, :, ip0:ip1] * (weights * kern**2)
-        tmp = numpy.einsum('xip,xiq->ipq', ao[1:4], ao[1:4], optimize=True) * C2
-        dT += numpy.einsum('ayi,ipq->aypq', fac, tmp, optimize=True)
+        grad_ao = ao[1:4]
+        dT += numpy.matmul(
+            grad_ao.transpose(0, 2, 1)[None, None, :, :, :],
+            grad_ao[None, None, :, :, :] * fac[:, :, None, :, None],
+        ).sum(axis=2) * C2
         ip0 = ip1
     dT = 0.5 * (dT + dT.transpose(0, 1, 3, 2))
     return dT
