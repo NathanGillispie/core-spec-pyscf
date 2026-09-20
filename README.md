@@ -284,6 +284,7 @@ Follow the PySCF conventions, I use `pytest` for tests.
 ## TODO:
 - [ ] $\omega$-dependent Quadratic Response
 - [ ] 2-photon absorption
+- [ ] Add support for Unrestricted/Generalized QR even if it means limiting to a specific approximation type.
 - [x] Cache 2TDM intermediate quantities.
 - [x] Add Gxc approximations
 - [x] Transition dipole moment (restricted)

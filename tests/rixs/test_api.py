@@ -44,6 +44,20 @@ def test_public_api_and_reference_validation():
         RIXS(_make_mf(), rixs.qr)
 
 
+def test_ground_transition_dipoles():
+    mf = _make_mf()
+    td = TDA(mf).set(nstates=1)
+    td.kernel()
+    rixs = RIXS(mf, QR(td))
+
+    state = 0
+    actual = rixs.ground_transition_dipoles([state])
+
+    expected = td.transition_dipole()[[state]].T
+
+    numpy.testing.assert_allclose(actual, expected)
+
+
 def test_checkpoint_roundtrip(tmp_path):
     chkfile = str(tmp_path / 'rixs.chk')
     rixs = _make_rixs(_make_mf(), chkfile=chkfile)

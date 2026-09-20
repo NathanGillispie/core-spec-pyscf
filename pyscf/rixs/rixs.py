@@ -1,9 +1,7 @@
-'''RIXS calculation driver using the Krammers-Heisenberg equation.
+'''RIXS calculation driver using the Kramers-Heisenberg equation.
 
-Currently stores QR and mf references. In the future, I will add the
-ability to specify energy ranges, produce the ground-to-intermediate and
-intermediate-to-final transition moments. For now, I'm adding features
-I know I will need for my current workflow.
+Stores QR and mean-field references and provides RIXS-specific response
+quantities built from them.
 '''
 
 from pyscf import lib
@@ -11,6 +9,9 @@ from pyscf import lib
 from pyscf.qr.hf import QR as QRBase
 
 from pyscf.rixs import chkfile as _chkfile
+from pyscf.rixs.response import (
+    ground_transition_dipoles as _ground_transition_dipoles,
+)
 
 
 class RIXS(lib.StreamObject):
@@ -41,6 +42,28 @@ class RIXS(lib.StreamObject):
         '''Write this RIXS calculation to a checkpoint file.'''
         _chkfile.save_rixs(self, chkfile=chkfile)
         return self
+
+    def ground_transition_dipoles(self, states=None):
+        '''Return ground-to-intermediate transition dipoles.
+
+        Parameters
+        ----------
+        states : array_like of int, optional
+            0-based indices into ``qr.manifold_n``.  Defaults to all
+            intermediate states.
+
+        Returns
+        -------
+        ndarray
+            Transition dipoles with shape ``(3, len(states))``.
+        '''
+        return _ground_transition_dipoles(
+            self.mol,
+            self.qr.mo_coeff,
+            self.qr.mo_occ,
+            self.qr.manifold_n,
+            states,
+        )
 
     @classmethod
     def from_chk(cls, chkfile, mf, *, precompute_gxc=False):
