@@ -4,6 +4,7 @@ from scipy.linalg import sqrtm
 
 from pyscf.lib import logger
 from .no_fxc import get_ab_no_fxc_rhf
+from ._utils import _resolve_nstates
 
 
 def _get_ab(tdobj, no_fxc=False):
@@ -20,15 +21,12 @@ def direct_diag_tda_kernel(self, x0=None, nstates=None, no_fxc=False):
     cpu0 = (logger.process_clock(), logger.perf_counter())
     self.check_sanity()
     self.dump_flags()
-    if nstates is None:
-        nstates = self.nstates
-    else:
-        self.nstates = nstates
 
     A, _ = _get_ab(self, no_fxc=no_fxc)
     assert A.dtype == numpy.float64
     nocc = A.shape[0]
     nvir = A.shape[1]
+    nstates = _resolve_nstates(self, nstates, nocc * nvir)
     A = A.reshape(nocc * nvir, nocc * nvir)
 
     e, x1 = numpy.linalg.eigh(A)
@@ -58,15 +56,12 @@ def direct_diag_rpa_kernel(self, x0=None, nstates=None, no_fxc=False):
     cpu0 = (logger.process_clock(), logger.perf_counter())
     self.check_sanity()
     self.dump_flags()
-    if nstates is None:
-        nstates = self.nstates
-    else:
-        self.nstates = nstates
 
     A, B = _get_ab(self, no_fxc=no_fxc)
     assert A.dtype == numpy.float64
     nocc = A.shape[0]
     nvir = A.shape[1]
+    nstates = _resolve_nstates(self, nstates, nocc * nvir)
     A = A.reshape(nocc * nvir, nocc * nvir)
     B = B.reshape(nocc * nvir, nocc * nvir)
 

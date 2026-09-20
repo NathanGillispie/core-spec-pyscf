@@ -4,6 +4,7 @@ from scipy.linalg import sqrtm
 
 from pyscf.lib import logger
 from .no_fxc import get_ab_no_fxc_uhf
+from ._utils import _resolve_nstates
 
 
 def _get_ab(tdobj, no_fxc=False):
@@ -20,10 +21,6 @@ def direct_diag_tda_kernel(self, x0=None, nstates=None, no_fxc=False):
     cpu0 = (logger.process_clock(), logger.perf_counter())
     self.check_sanity()
     self.dump_flags()
-    if nstates is None:
-        nstates = self.nstates
-    else:
-        self.nstates = nstates
 
     (aa, ab, bb), _ = _get_ab(self, no_fxc=no_fxc)
     assert ab.dtype == numpy.float64
@@ -33,6 +30,7 @@ def direct_diag_tda_kernel(self, x0=None, nstates=None, no_fxc=False):
 
     ova = nocca * nvira
     ovb = noccb * nvirb
+    nstates = _resolve_nstates(self, nstates, ova + ovb)
     A = numpy.zeros((ova + ovb, ova + ovb))
 
     aa = aa.reshape((ova, ova))
@@ -79,10 +77,6 @@ def direct_diag_rpa_kernel(self, x0=None, nstates=None, no_fxc=False):
     cpu0 = (logger.process_clock(), logger.perf_counter())
     self.check_sanity()
     self.dump_flags()
-    if nstates is None:
-        nstates = self.nstates
-    else:
-        self.nstates = nstates
 
     (Aaa, Aab, Abb), (Baa, Bab, Bbb) = _get_ab(self, no_fxc=no_fxc)
     assert Aab.dtype == numpy.float64
@@ -93,6 +87,7 @@ def direct_diag_rpa_kernel(self, x0=None, nstates=None, no_fxc=False):
 
     ova = nocca * nvira
     ovb = noccb * nvirb
+    nstates = _resolve_nstates(self, nstates, ova + ovb)
 
     Aaa = Aaa.reshape((ova, ova))
     Aba = Aab.transpose((2, 3, 0, 1)).reshape((ovb, ova))

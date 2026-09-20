@@ -10,6 +10,18 @@ def _as_index_list(idx):
     return [int(i) for i in numpy.atleast_1d(idx)]
 
 
+def _resolve_nstates(tdobj, nstates, max_nstates):
+    '''Use the full response space when direct diagonalization is defaulted.'''
+    if nstates is None:
+        default_nstates = getattr(type(tdobj), 'nstates', tdobj.nstates)
+        if tdobj.nstates == default_nstates:
+            nstates = max_nstates
+        else:
+            nstates = tdobj.nstates
+    tdobj.nstates = nstates
+    return nstates
+
+
 def _as_energy_window(window):
     if not hasattr(window, '__len__') or len(window) != 2:
         raise ValueError('core_window must be a (emin, emax) pair')

@@ -275,6 +275,16 @@ def _rhf_ab(shift=0.0):
     return A, B
 
 
+def _rhf_ab_2():
+    A = numpy.zeros((2, 1, 2, 1))
+    B = numpy.zeros((2, 1, 2, 1))
+    A[0, 0, 0, 0] = 2.0
+    A[1, 0, 1, 0] = 3.0
+    B[0, 0, 0, 0] = 0.4
+    B[1, 0, 1, 0] = 0.4
+    return A, B
+
+
 def _uhf_ab():
     A = numpy.zeros((1, 1, 1, 1))
     B = numpy.zeros((1, 1, 1, 1))
@@ -282,6 +292,24 @@ def _uhf_ab():
     B[0, 0, 0, 0] = 0.4
     z = numpy.zeros((1, 1, 1, 1))
     return (A, z, A.copy()), (B, z.copy(), B.copy())
+
+
+def test_direct_diag_defaults_to_full_response_space():
+    fake = _FakeTD()
+    fake.get_ab = lambda mf=None, frozen=None: _rhf_ab_2()
+
+    e, xy = cvs_rhf.direct_diag_tda_kernel(fake)
+    assert len(e) == 2
+    assert len(xy) == 2
+    assert fake.nstates == 2
+
+    e, xy = cvs_rhf.direct_diag_rpa_kernel(fake)
+    assert len(e) == 2
+    assert len(xy) == 2
+
+    e, xy = cvs_rhf.direct_diag_tda_kernel(fake, nstates=1)
+    assert len(e) == 1
+    assert len(xy) == 1
 
 
 def test_direct_diag_nstates_and_complex_sqrtm(monkeypatch, tmp_path):
