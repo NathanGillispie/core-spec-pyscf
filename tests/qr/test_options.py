@@ -9,7 +9,7 @@ import numpy
 from pyscf import gto, dft
 from pyscf.tdscf import RPA, TDA
 from pyscf.qr import QR
-from pyscf.qr.test.common import requires_frozen
+from .common import requires_frozen
 
 pytestmark = requires_frozen
 

@@ -11,12 +11,13 @@ include = ["pyscf.*"]
 exclude = ["pyscf.*.test", "pyscf.*.test.*"]
 
 [tool.pytest.ini_options]
-testpaths = ["pyscf"]
+testpaths = ["tests"]
 addopts = [
     "--cov=pyscf/cvs",
     "--cov=pyscf/qr",
     "--cov=pyscf/zora",
     "--cov-report=term-missing",
+    "--import-mode=importlib",
 ]
 
 [tool.coverage.run]

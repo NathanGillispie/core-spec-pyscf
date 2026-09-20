@@ -13,7 +13,7 @@ from pyscf.qr.manifold import gxc_tensor_shape
 from pyscf.qr.rhf import Gxc
 from pyscf.qr.uhf import UQR
 from pyscf.qr.ghf import GQR
-from pyscf.qr.test.common import requires_frozen
+from .common import requires_frozen
 
 
 def test_plugin_import():
