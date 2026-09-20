@@ -31,7 +31,8 @@ from .integrals import DEFAULT_GRID_LEVEL
 __author__ = 'Nathan Gillispie'
 
 
-def zora(mf, spin_orbit=False, grid_level=None, grid=None):
+def zora(mf, spin_orbit=False, grid_level=None, grid=None,
+         mo_energy_correction=True):
     '''Enable model-potential ZORA on an SCF object.
 
     Args:
@@ -45,6 +46,9 @@ def zora(mf, spin_orbit=False, grid_level=None, grid=None):
             ZORA quadrature level (Treutler, no pruning). Default 8.
         grid : :class:`pyscf.dft.gen_grid.Grids` or None
             Optional pre-built grid. If given, ``grid_level`` is ignored.
+        mo_energy_correction : bool
+            Correct occupied MO energies after the SCF calculation using the
+            ZORA ``_eps_scal_ao`` matrix. Default is True.
 
     Returns:
         The same mean-field object with a ZORA mixin. Assign the result:
@@ -62,32 +66,42 @@ def zora(mf, spin_orbit=False, grid_level=None, grid=None):
     if isinstance(mf, ZORA_SCF):
         mf.with_zora.spin_orbit = spin_orbit
         mf.with_zora.grid_level = grid_level
+        mf.with_zora.mo_energy_correction = mo_energy_correction
         if grid is not None:
             mf.with_zora.grids = grid
         mf.with_zora.reset()
         return mf
 
-    obj = ZORA_SCF(mf, spin_orbit=spin_orbit, grid_level=grid_level, grid=grid)
+    obj = ZORA_SCF(mf,
+                   spin_orbit=spin_orbit,
+                   grid_level=grid_level,
+                   grid=grid,
+                   mo_energy_correction=mo_energy_correction)
     return lib.set_class(obj, (ZORA_SCF, mf.__class__))
 
 
 class ZORAHelper(lib.StreamObject):
     '''Holds MP-ZORA options and cached one-electron integrals.'''
 
-    _keys = {'mol', 'spin_orbit', 'grid_level', 'grids', 'max_memory'}
+    _keys = {
+        'mol', 'spin_orbit', 'grid_level', 'grids', 'max_memory',
+        'mo_energy_correction'
+    }
 
     def __init__(self,
                  mol,
                  spin_orbit=False,
                  grid_level=DEFAULT_GRID_LEVEL,
                  grid=None,
-                 max_memory=None):
+                 max_memory=None,
+                 mo_energy_correction=True):
         self.mol = mol
         self.stdout = mol.stdout
         self.verbose = mol.verbose
         self.spin_orbit = spin_orbit
         self.grid_level = grid_level
         self.grids = grid
+        self.mo_energy_correction = mo_energy_correction
         self.max_memory = max_memory if max_memory is not None else getattr(
             mol, 'max_memory', 4000)
         self._hcore = None
@@ -102,6 +116,7 @@ class ZORAHelper(lib.StreamObject):
         log.info('******** %s ********', self.__class__)
         log.info('grid_level = %s', self.grid_level)
         log.info('spin_orbit = %s', self.spin_orbit)
+        log.info('mo_energy_correction = %s', self.mo_energy_correction)
         return self
 
     def reset(self, mol=None):
@@ -189,12 +204,14 @@ class ZORA_SCF:
                  mf,
                  spin_orbit=False,
                  grid_level=DEFAULT_GRID_LEVEL,
-                 grid=None):
+                 grid=None,
+                 mo_energy_correction=True):
         self.__dict__.update(mf.__dict__)
         self.with_zora = ZORAHelper(mf.mol,
                                     spin_orbit=spin_orbit,
                                     grid_level=grid_level,
                                     grid=grid,
+                                    mo_energy_correction=mo_energy_correction,
                                     max_memory=mf.max_memory)
 
     def undo_zora(self):
@@ -211,6 +228,47 @@ class ZORA_SCF:
     def reset(self, mol=None):
         self.with_zora.reset(mol)
         return super().reset(mol)
+
+    def _correct_mo_energy(self, mo_energy, mo_coeff, mo_occ, eps_scal_ao):
+        '''Apply the ZORA correction to occupied orbital energies.'''
+        occ_idx = numpy.where(numpy.asarray(mo_occ) != 0)[0]
+        if occ_idx.size == 0:
+            return
+
+        if mo_coeff.shape[0] == eps_scal_ao.shape[0]:
+            eps_scal = eps_scal_ao
+        elif mo_coeff.shape[0] == 2 * eps_scal_ao.shape[0]:
+            eps_scal = scipy.linalg.block_diag(eps_scal_ao, eps_scal_ao)
+        else:
+            raise ValueError(
+                'ZORA epsilon-scaling matrix and MO coefficients have '
+                'incompatible dimensions')
+
+        mo_occ_coeff = mo_coeff[:, occ_idx]
+        eps_scal_mo = mo_occ_coeff.conj().T @ eps_scal @ mo_occ_coeff
+        factor = (1 + numpy.diag(eps_scal_mo).real)**-1
+        mo_energy[occ_idx] *= factor
+
+    def _apply_mo_energy_correction(self):
+        if not self.with_zora.mo_energy_correction:
+            return
+        eps_scal_ao = self.with_zora._eps_scal_ao
+        if (eps_scal_ao is None or self.mo_energy is None
+                or self.mo_coeff is None or self.mo_occ is None):
+            return
+
+        if numpy.asarray(self.mo_coeff).ndim == 3:
+            for spin in range(2):
+                self._correct_mo_energy(self.mo_energy[spin],
+                                        self.mo_coeff[spin],
+                                        self.mo_occ[spin], eps_scal_ao)
+        else:
+            self._correct_mo_energy(self.mo_energy, self.mo_coeff,
+                                    self.mo_occ, eps_scal_ao)
+
+    def _finalize(self):
+        super()._finalize()
+        self._apply_mo_energy_correction()
 
     def get_hcore(self, mol=None):
         if mol is None:
@@ -237,7 +295,8 @@ class ZORA_SCF:
                 self, 'Destination object of to_hf/to_ks is not a '
                 'ZORA object. Convert dst to ZORA.')
             dst = dst.zora(spin_orbit=self.with_zora.spin_orbit,
-                           grid_level=self.with_zora.grid_level)
+                           grid_level=self.with_zora.grid_level,
+                           mo_energy_correction=self.with_zora.mo_energy_correction)
         return hf.SCF._transfer_attrs_(self, dst)
 
 

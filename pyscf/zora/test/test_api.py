@@ -5,8 +5,9 @@ import numpy as np
 import pytest
 import pyscf
 import pyscf.zora
+from pyscf.tdscf import TDA
 from pyscf.zora import integrals
-from pyscf.zora.test.common import GRAD_GRID_LEVEL, make_hf_mol, make_rhf
+from pyscf.zora.test.common import GRAD_GRID_LEVEL, make_hf_mol, make_rhf, make_rks
 
 
 def test_spin_orbit_ignored_on_rhf():
@@ -103,3 +104,81 @@ def test_idempotent_updates_options():
     h3 = mf.get_hcore()
     assert mf.with_zora.grid_level == GRAD_GRID_LEVEL
     assert not np.allclose(h8, h3)
+
+
+def test_mo_energy_correction_is_default_and_can_be_disabled():
+    mol = make_hf_mol()
+    mf = pyscf.scf.RHF(mol).zora(grid_level=GRAD_GRID_LEVEL)
+    mf_no_corr = pyscf.scf.RHF(mol).zora(
+        grid_level=GRAD_GRID_LEVEL, mo_energy_correction=False)
+    mf.verbose = mf_no_corr.verbose = 0
+    mf.kernel()
+    mf_no_corr.kernel()
+
+    assert mf.with_zora.mo_energy_correction is True
+    assert mf_no_corr.with_zora.mo_energy_correction is False
+
+    occ_idx = np.where(mf.mo_occ != 0)[0]
+    eps_scal_mo = (mf.mo_coeff[:, occ_idx].conj().T
+                   @ mf.with_zora._eps_scal_ao @ mf.mo_coeff[:, occ_idx])
+    expected = mf_no_corr.mo_energy.copy()
+    expected[occ_idx] *= (1 + np.diag(eps_scal_mo).real)**-1
+    assert np.allclose(mf.mo_energy, expected)
+    assert np.allclose(mf.mo_energy[mf.mo_occ == 0],
+                       mf_no_corr.mo_energy[mf.mo_occ == 0])
+
+
+def test_uhf_mo_energy_correction_changes_occupied_energies():
+    mol = make_hf_mol()
+    mf = pyscf.scf.UHF(mol).zora(grid_level=GRAD_GRID_LEVEL)
+    mf_no_corr = pyscf.scf.UHF(mol).zora(
+        grid_level=GRAD_GRID_LEVEL, mo_energy_correction=False)
+    mf.verbose = mf_no_corr.verbose = 0
+    mf.kernel()
+    mf_no_corr.kernel()
+
+    for spin in range(2):
+        occ_idx = mf.mo_occ[spin] != 0
+        virt_idx = ~occ_idx
+        assert not np.allclose(mf.mo_energy[spin][occ_idx],
+                               mf_no_corr.mo_energy[spin][occ_idx])
+        assert np.allclose(mf.mo_energy[spin][virt_idx],
+                           mf_no_corr.mo_energy[spin][virt_idx])
+
+
+def test_ghf_mo_energy_correction_changes_occupied_energies():
+    mol = make_hf_mol()
+    mf = pyscf.scf.GHF(mol).zora(grid_level=GRAD_GRID_LEVEL)
+    mf_no_corr = pyscf.scf.GHF(mol).zora(
+        grid_level=GRAD_GRID_LEVEL, mo_energy_correction=False)
+    mf.verbose = mf_no_corr.verbose = 0
+    mf.kernel()
+    mf_no_corr.kernel()
+
+    occ_idx = mf.mo_occ != 0
+    virt_idx = ~occ_idx
+    assert not np.allclose(mf.mo_energy[occ_idx],
+                           mf_no_corr.mo_energy[occ_idx])
+    assert np.allclose(mf.mo_energy[virt_idx],
+                       mf_no_corr.mo_energy[virt_idx])
+
+
+def test_zora_tda_uses_corrected_mo_energy():
+    mol = make_hf_mol()
+    mf = make_rks(mol)
+    mf_no_corr = pyscf.dft.RKS(mol, xc='lda,vwn').zora(
+        grid_level=GRAD_GRID_LEVEL, mo_energy_correction=False)
+    mf.verbose = mf_no_corr.verbose = 0
+    mf.kernel()
+    mf_no_corr.kernel()
+
+    td = TDA(mf).set(nstates=1)
+    td_no_corr = TDA(mf_no_corr).set(nstates=1)
+    td.verbose = td_no_corr.verbose = 0
+    td.kernel()
+    td_no_corr.kernel()
+
+    a, _ = td.get_ab()
+    a_no_corr, _ = td_no_corr.get_ab()
+    assert not np.allclose(a, a_no_corr)
+    assert not np.allclose(td.e, td_no_corr.e)
