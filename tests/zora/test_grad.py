@@ -4,7 +4,7 @@ import numpy as np
 import pyscf
 import pyscf.zora
 from pyscf.zora.grad import make_grad_object
-from pyscf.zora.test.common import (
+from .common import (
     ENERGY_GRAD_TOL,
     TEST_GRID_LEVEL,
     energy_fd_error,

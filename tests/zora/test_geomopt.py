@@ -5,7 +5,7 @@ import pytest
 
 pytest.importorskip('geometric')
 
-from pyscf.zora.test.common import (
+from .common import (
     GEOMOPT_GNORM_TOL,
     geomopt_gnorm,
     make_ghf,
@@ -20,7 +20,7 @@ from pyscf.zora.test.common import (
 
 
 def test_rhf_geomopt():
-    from pyscf.zora.test.common import CONV_PARAMS
+    from .common import CONV_PARAMS
     mol = make_hf_mol(1.3)
     mf = make_rhf(mol, conv_tol=1e-10)
     mol_eq = mf.Gradients().optimizer().kernel(CONV_PARAMS)

@@ -3,7 +3,7 @@
 import numpy as np
 import pyscf
 import pyscf.zora
-from pyscf.zora.test.common import (
+from .common import (
     TEST_GRID_LEVEL,
     make_ghf,
     make_gks,

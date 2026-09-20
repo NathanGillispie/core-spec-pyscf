@@ -7,7 +7,7 @@ import pyscf
 import pyscf.zora
 from pyscf.tdscf import TDA
 from pyscf.zora import integrals
-from pyscf.zora.test.common import TEST_GRID_LEVEL, make_hf_mol, make_rhf, make_rks
+from .common import TEST_GRID_LEVEL, make_hf_mol, make_rhf, make_rks
 
 
 def test_spin_orbit_ignored_on_rhf():

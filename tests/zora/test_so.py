@@ -5,7 +5,7 @@ import pyscf
 import pyscf.zora
 from pyscf.tdscf import TDA
 from pyscf.zora import compute_SO_coupling_matrix
-from pyscf.zora.test.common import TEST_GRID_LEVEL
+from .common import TEST_GRID_LEVEL
 
 
 def test_so_coupling_matrix_h2():

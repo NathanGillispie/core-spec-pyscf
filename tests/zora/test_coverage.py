@@ -11,7 +11,7 @@ import pyscf.zora
 from pyscf.zora import compute_SO_coupling_matrix
 from pyscf.zora import grad as zora_grad
 from pyscf.zora import integrals
-from pyscf.zora.test.common import TEST_GRID_LEVEL, make_hf_mol
+from .common import TEST_GRID_LEVEL, make_hf_mol
 
 zora_module = import_module('pyscf.zora.zora')
 

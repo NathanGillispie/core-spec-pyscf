@@ -2,7 +2,7 @@
 
 import numpy as np
 from pyscf.zora import integrals
-from pyscf.zora.test.common import (
+from .common import (
     FD_AO_TOL,
     TEST_GRID_LEVEL,
     full_T_grad,
