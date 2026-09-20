@@ -8,7 +8,6 @@ include-package-data = true
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["pyscf.*"]
-exclude = ["pyscf.*.test", "pyscf.*.test.*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -22,7 +21,7 @@ addopts = [
 
 [tool.coverage.run]
 source = ["pyscf/cvs", "pyscf/qr", "pyscf/zora"]
-omit = ["*/test/*"]
+omit = ["*/tests/*"]
 
 [project]
 name = "core-spec-pyscf"
@@ -46,6 +45,7 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
+test = ["pytest", "pytest-cov", "geometric"]
 cvs = ["pyscf>=2.10"]
 
 [project.urls]
