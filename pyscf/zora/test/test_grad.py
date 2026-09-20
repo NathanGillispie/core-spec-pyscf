@@ -6,7 +6,7 @@ import pyscf.zora
 from pyscf.zora.grad import make_grad_object
 from pyscf.zora.test.common import (
     ENERGY_GRAD_TOL,
-    GRAD_GRID_LEVEL,
+    TEST_GRID_LEVEL,
     energy_fd_error,
     make_ghf,
     make_gks,
@@ -110,7 +110,7 @@ def test_make_grad_object_from_gradients():
 
 def test_density_fit_then_zora_grad():
     mol = make_hf_mol()
-    mf = pyscf.scf.RHF(mol).density_fit().zora(grid_level=GRAD_GRID_LEVEL)
+    mf = pyscf.scf.RHF(mol).density_fit().zora(grid_level=TEST_GRID_LEVEL)
     mf.verbose = 0
     mf.conv_tol = 1e-10
     mf.kernel()
@@ -127,7 +127,7 @@ def test_ecp_energy_and_grad():
         verbose=0,
         unit='Angstrom',
     )
-    mf = pyscf.scf.RHF(mol).zora(grid_level=GRAD_GRID_LEVEL)
+    mf = pyscf.scf.RHF(mol).zora(grid_level=TEST_GRID_LEVEL)
     mf.verbose = 0
     mf.conv_tol = 1e-10
     mf.kernel()

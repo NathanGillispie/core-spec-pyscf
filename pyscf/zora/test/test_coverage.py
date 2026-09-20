@@ -11,7 +11,7 @@ import pyscf.zora
 from pyscf.zora import compute_SO_coupling_matrix
 from pyscf.zora import grad as zora_grad
 from pyscf.zora import integrals
-from pyscf.zora.test.common import GRAD_GRID_LEVEL, make_hf_mol
+from pyscf.zora.test.common import TEST_GRID_LEVEL, make_hf_mol
 
 zora_module = import_module('pyscf.zora.zora')
 
@@ -92,7 +92,7 @@ def test_so_extra_force_without_density():
 
 def test_zora_rewrap_with_grid():
     mol = make_hf_mol()
-    mf = pyscf.scf.RHF(mol).zora(grid_level=GRAD_GRID_LEVEL)
+    mf = pyscf.scf.RHF(mol).zora(grid_level=TEST_GRID_LEVEL)
     grid = object()
     assert mf.zora(grid=grid) is mf
     assert mf.with_zora.grids is grid

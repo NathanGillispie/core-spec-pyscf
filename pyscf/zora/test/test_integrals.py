@@ -4,7 +4,7 @@ import numpy as np
 from pyscf.zora import integrals
 from pyscf.zora.test.common import (
     FD_AO_TOL,
-    GRAD_GRID_LEVEL,
+    TEST_GRID_LEVEL,
     full_T_grad,
     Hso_frozen,
     make_hf_mol,
@@ -13,7 +13,7 @@ from pyscf.zora.test.common import (
 
 def test_dveff_frozen_grid():
     mol = make_hf_mol(1.1)
-    grid = integrals.build_zora_grid(mol, level=GRAD_GRID_LEVEL)
+    grid = integrals.build_zora_grid(mol, level=TEST_GRID_LEVEL)
     ia = 1
     c, a = integrals.modbas_for_mol(mol)[ia]
     Z = mol.atom_charge(ia)
@@ -43,7 +43,7 @@ def test_T_ao_grad_frozen_grid():
     mol = make_hf_mol(1.1)
     ia = 1
     delta = 1e-5
-    grid = integrals.build_zora_grid(mol, level=GRAD_GRID_LEVEL)
+    grid = integrals.build_zora_grid(mol, level=TEST_GRID_LEVEL)
     kernel0 = integrals.zora_kernel(
         integrals.eval_model_potential(mol, grid.coords))
     dT = full_T_grad(mol, grid, kernel0, ia)
@@ -72,7 +72,7 @@ def test_T_ao_grad_frozen_grid():
 
 def test_eval_zora_T_and_eps_matches_T():
     mol = make_hf_mol(1.1)
-    grid = integrals.build_zora_grid(mol, level=GRAD_GRID_LEVEL)
+    grid = integrals.build_zora_grid(mol, level=TEST_GRID_LEVEL)
     kernel = integrals.zora_kernel(
         integrals.eval_model_potential(mol, grid.coords))
     T, _ = integrals.eval_zora_T(mol, grid, kernel)
@@ -86,7 +86,7 @@ def test_Hso_ao_grad_frozen_grid():
     mol = make_hf_mol(1.1)
     ia = 1
     delta = 1e-5
-    grid = integrals.build_zora_grid(mol, level=GRAD_GRID_LEVEL)
+    grid = integrals.build_zora_grid(mol, level=TEST_GRID_LEVEL)
     veff0 = integrals.eval_model_potential(mol, grid.coords)
     kernel0 = integrals.zora_kernel(veff0)
     dHso = integrals.eval_zora_SO_grad(mol, grid, kernel0, veff0)

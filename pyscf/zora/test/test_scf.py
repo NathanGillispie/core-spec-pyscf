@@ -4,7 +4,7 @@ import numpy as np
 import pyscf
 import pyscf.zora
 from pyscf.zora.test.common import (
-    GRAD_GRID_LEVEL,
+    TEST_GRID_LEVEL,
     make_ghf,
     make_gks,
     make_hf_mol,
@@ -49,7 +49,7 @@ def test_rks_energy_differs_from_nr():
     mf.xc = 'lda,vwn'
     mf.verbose = 0
     e_nr = mf.kernel()
-    mf = mf.zora(grid_level=GRAD_GRID_LEVEL)
+    mf = mf.zora(grid_level=TEST_GRID_LEVEL)
     e_z = mf.kernel()
     assert abs(e_z - e_nr) > 1e-4
 
@@ -82,7 +82,7 @@ def test_rohf_closed_shell_energy():
 
 def test_rohf_open_shell_runs():
     mol = pyscf.gto.M(atom='Li 0 0 0', basis='sto-3g', spin=1, verbose=0)
-    mf = pyscf.scf.ROHF(mol).zora(grid_level=GRAD_GRID_LEVEL)
+    mf = pyscf.scf.ROHF(mol).zora(grid_level=TEST_GRID_LEVEL)
     mf.verbose = 0
     e = mf.kernel()
     assert mf.converged

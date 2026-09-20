@@ -5,7 +5,7 @@ import pyscf
 import pyscf.zora
 from pyscf.tdscf import TDA
 from pyscf.zora import compute_SO_coupling_matrix
-from pyscf.zora.test.common import GRAD_GRID_LEVEL
+from pyscf.zora.test.common import TEST_GRID_LEVEL
 
 
 def test_so_coupling_matrix_h2():
@@ -15,7 +15,7 @@ def test_so_coupling_matrix_h2():
         unit='Angstrom',
         verbose=0,
     )
-    mf = pyscf.scf.RHF(mol).zora(grid_level=GRAD_GRID_LEVEL)
+    mf = pyscf.scf.RHF(mol).zora(grid_level=TEST_GRID_LEVEL)
     mf.with_zora.spin_orbit = True
     mf.kernel()
     assert mf.with_zora.get_hso() is not None

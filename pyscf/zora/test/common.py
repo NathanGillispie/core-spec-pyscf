@@ -9,7 +9,7 @@ from pyscf.zora import integrals
 FD_AO_TOL = 1e-5
 ENERGY_GRAD_TOL = 5e-4
 GEOMOPT_GNORM_TOL = 5e-4
-GRAD_GRID_LEVEL = 3
+TEST_GRID_LEVEL = 3
 
 CONV_PARAMS = {
     'convergence_energy': 1e-6,
@@ -44,7 +44,7 @@ def make_hf_mol(bond_ang=1.1, verbose=0):
 
 
 def _zora(mf):
-    return mf.zora(grid_level=GRAD_GRID_LEVEL)
+    return mf.zora(grid_level=TEST_GRID_LEVEL)
 
 
 def make_rhf(mol, conv_tol=1e-12):
@@ -81,7 +81,7 @@ def make_ghf(mol, conv_tol=1e-12, spin_orbit=False):
     mf = pyscf.scf.GHF(mol)
     mf.verbose = 0
     mf.conv_tol = conv_tol
-    return mf.zora(spin_orbit=spin_orbit, grid_level=GRAD_GRID_LEVEL)
+    return mf.zora(spin_orbit=spin_orbit, grid_level=TEST_GRID_LEVEL)
 
 
 def make_gks(mol, conv_tol=1e-10, spin_orbit=False):
@@ -90,7 +90,7 @@ def make_gks(mol, conv_tol=1e-10, spin_orbit=False):
     mf.collinear = 'col'
     mf.verbose = 0
     mf.conv_tol = conv_tol
-    return mf.zora(spin_orbit=spin_orbit, grid_level=GRAD_GRID_LEVEL)
+    return mf.zora(spin_orbit=spin_orbit, grid_level=TEST_GRID_LEVEL)
 
 
 def make_rohf(mol, conv_tol=1e-12):
