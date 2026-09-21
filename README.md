@@ -8,66 +8,63 @@ LDA functionals and restricted references)! VeloxChem beat me to
 frequency-dependent QR... This was very difficult, but necessary for my PhD
 work.
 
-## Background
+This project initially started because PySCF had no support for ZORA or CVS
+for a long time. I started taking it more seriously starting with v0.4 where
+I added support for quadratic response. That started as a way to coalesce all
+of the features I had created across different Python scripts. Notably, I had
+different code for full QR without ZORA, CVS, or TDA; and QR with all of those.
+Designing for all the different use-cases and approximations was difficult but rewarding.
+
+## Capabilities
+
+1. **Quadratic Response**: currently, full QR is for restricted SCF and LDA/GGA
+   functionals for RKS. Various approximations were added. Supports
+   pre-computing or lazily evaluating $g^\text{xc}$. Supports LDA and RPA linear
+   response. Supports providing two separate linear response calculations
+   (manifolds) for $\alpha$ and $\beta$ perturbations. 
+3. **Resonant Inelastic X-ray Scattering (RIXS) maps**: using averaged
+   Kramers--Heisenberg equation, and transition moments from linear and quadratic
+   response.
+4. **Spin-orbit (MP)-ZORA + analytic gradients**: The best relativistic correction.[^3]
+   scalar-relativistic is also allowed. Analytic gradients for generalized SCF methods
+   require PySCF >=2.15 \[or master branch at time of writing\].
+6. **Core-Valence Separation (CVS)**: Supports direct-diagonalization. This is often
+   much faster for conditions relevant to our work. Supports eliminating
+   the $f^\text{xc}$ term. Recent results from Pak and Nascimento[^2] show that
+   this term is expensive and unnecessary for qualitatively-accurate X-ray absorption spectra.
+   Supports specifying core orbitals by index, or by energy window.
 
 Core spectroscopy often involves excitations from a relatively small number of
-core orbitals. This is a huge advantage for linear response Time-Dependent
-Density Functional Theory (TDDFT) since you can apply core-valence separation.
-In theory, core orbitals and valence orbitals have such vastly different
+core orbitals. Core orbitals and valence orbitals often have such different
 localizations and energies that they are separable in the Schrödinger equation
-to good approximation.[^1]
-
-PySCF provides a good basis for TDDFT calculations. However, a few additions
-were needed for convenient core-level spectroscopy:
-
-1. **Direct diagonalization**: Davidson diagonalization is comically slow,
-   around 100x slower than direct diagonalization under conditions relevant to
-   our work, due to excitations from a small number of core orbitals. We often require
-   hundreds of states in our TDDFT calculations, outweighing the benefits of the
-   Davidson scheme for the AB matrix diag.
-
-2. **No Fxc**: Exchange and correlation terms are often the most computationally
-   expensive part of response TDDFT calculations. However, recent results from
-   Pak and Nascimento[^2] show that the term is unnecessary for
-   qualitatively-accurate X-ray absorption spectra.
-
-3. **Spin-orbit (MP)-ZORA**: The best scalar-relativistic correction.[^3] This
-   code allows for ZORA geometry optimizations including Spin-orbit when using
-   PySCF >=2.15 \[or master branch at time of writing\].
-
-4. **Quadratic response**: Not available in PySCF. This extension implements
-   excited-to-excited state transition dipole moments from TDDFT response
-   theory (restricted RHF/RKS, LDA and GGA functionals) which we use for
-   Resonant-Inelastic X-ray Scattering calculations.
-
-5. **Core-valence separation**: this approximation was not previously implemented.
-   As of PySCF 2.10, this is supported indirectly through the `frozen` attribute.
-   This code still adds a `CVS` mixin for specifying core orbitals via index or energy window.
-
+to good approximation.[^1] This is the basis of the CVS approximation and is
+highly effective for linear-response Time-Dependent Density Functional Theory
+(TDDFT). As of PySCF 2.10, this is supported indirectly through the `frozen`
+attribute. This code still adds a `CVS` mixin for specifying core orbitals
+via index or energy window.
+  
 ### Details
-- The diagonalization of Casida's equation[^4]
-```math
-\begin{pmatrix}\mathbf{A} & \mathbf{B}\\ \mathbf{-B}&\mathbf{-A}\end{pmatrix}\begin{pmatrix}\mathbf{X}\\ \mathbf{Y}\end{pmatrix}=\Omega \begin{pmatrix}\mathbf{X}\\ \mathbf{Y}\end{pmatrix}
-```
-is done in its hermitian form, assuming $(\mathbf{A}-\mathbf{B})$ and $(\mathbf{A}+\mathbf{B})$ are positive semi-definite:
-```math
-\begin{gather}\mathbf{CZ}=\Omega^2 \mathbf{Z}\\ \mathbf{C} = (\mathbf{A}-\mathbf{B})^{1/2}(\mathbf{A}+\mathbf{B})(\mathbf{A}-\mathbf{B})^{1/2}\\ \mathbf{Z} = (\mathbf{A}-\mathbf{B})^{1/2}(\mathbf{X}-\mathbf{Y})\end{gather}
-```
+- The following QR approximations are implemented:
+   - `"Nascimento"` for $X^{(\alpha\beta)}=Y^{(\alpha\beta)}=\mathbf{0}$
+   - `"Pseudo"` for $\omega_\alpha + \omega_\beta \mapsto 0$ and
+   - `"Zero"` for $g^\text{xc}=0$.
+- QR as implemented in the `pyscf.qr` module builds immutable linear-response
+  `Manifold` objects. Following PySCF conventions, TDA sets $Y$ to scalar 0, or tuple `(0,0)`.
+  Frozen orbitals are set to 0 so that the shape of the excitation vectors is
+  consistent, even for two different manifolds. Saving and loading QR to
+  checkfiles always saves sufficient information to restart completely.
+- QR solves a Casida-like equation for the off-diagonal blocks of the
+  excited-to-excited transition density matrix (2TDM). The 2TDM is the main result,
+  but helpers expose transition dipole moments and oscillator strengths for convenience.
 - When removing the $f_\text{xc}$ term, the exact Hartree exchange is included,
-  regardless of the functional used. Due to technical reasons, direct
-  diagonalization is always used with `no_fxc`.
-- The ZORA correction uses a model basis. The exact values come from
+  regardless of the functional used.
+- The (MP)-ZORA correction uses a model basis obtained from
   [NWCHEM](https://nwchemgit.github.io/).
-- Quadratic response is implemented in `pyscf.qr` for restricted RHF/RKS
-  references (RPA and TDA). The driver builds linear-response manifolds from
-  TDSCF objects, solves a Casida-like equation for the off-diagonal blocks of the
-  excited-to-excited transition density matrix (2TDM), and exposes transition
-  dipole moments and oscillator strengths.
 
 ## Dependencies
 
-This project requires nothing more than PySCF **>=2.7** to run. Features vary by
-version. Ordinary QR and ZORA energies are supported in this version.
+This project requires nothing more than PySCF **>=2.7** to run. Ordinary QR and
+ZORA energies are always supported. Other features vary by PySCF version. 
 
 - **>=2.10**: QR calculations using frozen orbitals and the `pyscf.cvs` module require
   PySCF 2.10 or newer. On older versions, importing `pyscf.cvs` raises `ImportError`.
@@ -78,6 +75,80 @@ version. Ordinary QR and ZORA energies are supported in this version.
 The QR example requires `matplotlib` to plot the data.
 
 ## Usage
+
+### Quadratic response
+
+Excited-to-excited state properties are computed with the `QR` driver in
+`pyscf.qr`. Import the module, run a linear-response calculation, then
+construct a `QR` object from the resulting TDSCF object:
+
+QR calculations using frozen orbitals require PySCF >=2.10.
+
+```py
+from pyscf import gto, dft
+from pyscf.tdscf import RPA
+import pyscf.qr
+from pyscf.qr import QR
+
+mol = gto.M(...)
+mf = dft.RKS(mol, xc='PBE0').run()
+
+tdobj = RPA(mf).set(nstates=4)
+tdobj.kernel()
+
+qrobj = QR(tdobj)
+tdm = qrobj.get_2tdm(0, 3)          # 2TDM for state 0 -> state 3
+tdip = qrobj.transition_dipole(tdm)  # (x, y, z) dipole vector
+```
+
+TDSCF objects are consumed at initialization: if linear response has not been
+run yet, `QR` calls `kernel()` for you and builds internal `Manifold` objects.
+The original `tdobj` is not retained.
+
+When both excited states come from the same active occupied subspace, a single
+TDSCF object is enough. For excitations out of different core (frozen-orbital)
+subspaces, pass two TDSCF objects that share the same mean-field reference:
+
+```py
+td_n = RPA(mf, frozen=frozen_idx_a).set(nstates=80)
+td_m = RPA(mf, frozen=frozen_idx_b).set(nstates=40)
+
+qrobj = QR(td_n, td_m)
+tdm = qrobj.get_2tdm(2, 0)
+```
+
+Both `RPA` and `TDA` manifolds are supported; mixing TDA and RPA in a QR calculation is not allowed.
+
+#### Options
+- `precompute_gxc` (default `False`): when `True`, call `qrobj.kernel()` to
+  fill the six-index $g_\text{xc}$ tensor in memory before repeated `get_2tdm`
+  calls. *This must be done first.* The default lazy mode recomputes the grid
+  contraction on each call and is faster for a small number of state pairs.
+- `approximation`: approximate the $g_\text{xc}$ contribution. `None` (default)
+  is the full quadratic response; `'Nascimento'` zeros the off-diagonal 2TDM
+  blocks; `'Zero'` sets $g_\text{xc} \leftarrow 0$; `'Pseudo'` uses the
+  pseudo-wavefunction approximation (shifts divergences to $\omega = 0$). The
+  approximation can also be changed after construction, e.g. `qrobj.approximation
+  = 'Pseudo'`.
+
+#### Checkpoints
+To pause after linear response and resume before the QR stage, save and restore manifold data:
+
+```py
+qrobj = QR(tdobj, chkfile='qr.chk')
+qrobj.save()                       # LR results only; Gxc is not checkpointed
+
+qrobj = QR.from_chk('qr.chk', mf)  # pass the mean-field object
+qrobj.kernel()                     # optional; needed if precompute_gxc=True
+tdm = qrobj.get_2tdm(0, 1)
+```
+
+See `examples/qr/LiH-all_approx.py` for a program demonstrating unphysical
+divergences in the 2TDM. In it we show QR transition dipoles against FCI and
+several $g_\text{xc}$ approximations. The produced graph is designed to
+replicate ref. 4.[^5]
+
+![LiH transition dipole moment between first and fourth excited states with respect to bond length.](./examples/qr/LiH-all_approx_reference.svg)
 
 ### ZORA
 
@@ -91,9 +162,8 @@ mf = scf.RHF(mol).zora()
 mf.run()
 ```
 This is model-potential (MP) ZORA: the core Hamiltonian is replaced with a
-scalar-relativistic counterpart built from tabulated atomic model potentials
-(not a self-consistent molecular KS potential). Assign the return value (`mf =
-mf.zora()`).
+(scalar-)relativistic counterpart built from tabulated atomic model potentials
+Assign the return value (`mf =mf.zora()`).
 
 Nuclear gradients and geometry optimization use the usual PySCF hooks:
 ```py
@@ -111,8 +181,7 @@ Spin–orbit MP-ZORA is available on GHF/GKS:
 mf = scf.GHF(mol).zora(spin_orbit=True)
 ```
 The ZORA quadrature level defaults to 8 (`mf.with_zora.grid_level`).
-Grid-weight response, GTH pseudopotential gradients, and picture-change
-properties are not implemented.
+Grid-weight response is not implemented.
 
 ### Core-valence separation
 
@@ -159,83 +228,6 @@ import pyscf.cvs
 tdobj = TDHF(mf).cvs(no_fxc=True, direct_diag=True)
 tdobj.kernel()
 ```
-
-### Quadratic response
-
-Excited-to-excited state properties are computed with the `QR` driver in
-`pyscf.qr`. Import the module, run a linear-response calculation, then
-construct a `QR` object from the resulting TDSCF object:
-
-QR without frozen orbitals is supported with PySCF 2.7 and newer. QR
-calculations using frozen orbitals require PySCF 2.10 or newer.
-
-```py
-from pyscf import gto, dft
-from pyscf.tdscf import RPA
-import pyscf.qr
-from pyscf.qr import QR
-
-mol = gto.M(...)
-mf = dft.RKS(mol, xc='PBE0').run()
-
-tdobj = RPA(mf).set(nstates=4)
-tdobj.kernel()
-
-qrobj = QR(tdobj)
-tdm = qrobj.get_2tdm(0, 3)          # 2TDM for state 0 -> state 3
-tdip = qrobj.transition_dipole(tdm)  # (x, y, z) dipole vector
-```
-
-TDSCF objects are consumed at initialization: if linear response has not been
-run yet, `QR` calls `kernel()` for you and builds internal `Manifold` objects.
-The original `tdobj` is not retained.
-
-When both excited states come from the same active occupied subspace, a single
-TDSCF object is enough. For excitations out of different core (frozen-orbital)
-subspaces, pass two TDSCF objects that share the same mean-field reference:
-
-```py
-td_n = RPA(mf, frozen=frozen_idx_a).set(nstates=80)
-td_m = RPA(mf, frozen=frozen_idx_b).set(nstates=40)
-
-qrobj = QR(td_n, td_m)
-tdm = qrobj.get_2tdm(2, 0)
-```
-
-Both `RPA` and `TDA` manifolds are supported; mixing TDA and RPA in a QR calculation is not allowed.
-
-#### Options
-- `precompute_gxc` (default `False`): when `True`, call `qrobj.kernel()` to
-  fill the six-index $g_\text{xc}$ tensor in memory before repeated `get_2tdm`
-  calls. The default lazy mode recomputes the grid contraction on each call and
-  is usually faster for a small number of state pairs.
-- `approximation`: approximate the $g_\text{xc}$ contribution. `None` (default)
-  is the full quadratic response; `'Nascimento'` zeros the off-diagonal 2TDM
-  blocks; `'Zero'` sets $g_\text{xc} \leftarrow 0$; `'Pseudo'` uses the
-  pseudo-wavefunction approximation (shifts divergences to $\omega = 0$). The
-  approximation can also be changed after construction, e.g. `qrobj.approximation
-  = 'Pseudo'`.
-
-**Note:** to use the precomputed gxc, you must run the `kernel` method.
-
-#### Checkpoints
-To pause after linear response and resume before the QR stage, save and restore manifold data:
-
-```py
-qrobj = QR(tdobj, chkfile='qr.chk')
-qrobj.save()                       # LR results only; Gxc is not checkpointed
-
-qrobj = QR.from_chk('qr.chk', mf)  # pass the live mean-field object
-qrobj.kernel()                       # optional; needed if precompute_gxc=True
-tdm = qrobj.get_2tdm(0, 1)
-```
-
-See `examples/qr/LiH-all_approx.py` for a program demonstrating unphysical
-divergences in the 2TDM. In it we show QR transition dipoles against FCI and
-several $g_\text{xc}$ approximations. The produced graph is designed to
-replicate ref. 5.[^5]
-
-![LiH transition dipole moment between first and fourth excited states with respect to bond length.](./examples/qr/LiH-all_approx_reference.svg)
 
 ## Installation
 The recommended installation method is to use `pip` with some kind of virtual
