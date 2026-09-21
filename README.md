@@ -8,12 +8,15 @@ LDA functionals and restricted references)! VeloxChem beat me to
 frequency-dependent QR... This was very difficult, but necessary for my PhD
 work.
 
-This project initially started because PySCF had no support for ZORA or CVS
-for a long time. I started taking it more seriously starting with v0.4 where
-I added support for quadratic response. That started as a way to coalesce all
-of the features I had created across different Python scripts. Notably, I had
-different code for full QR without ZORA, CVS, or TDA; and QR with all of those.
-Designing for all the different use-cases and approximations was difficult but rewarding.
+This project initially began because PySCF had no support for ZORA or CVS. v0.4 
+added support for quadratic response. That coalesced all of the features I created
+across different Python scripts. Notably, I had different code for full QR without
+ZORA, CVS, or TDA; and QR with all of those. Designing for all the different
+use-cases and approximations was a fun puzzle.
+
+![Example RIXS map of cyanocuprate](examples/rixs/cucn2_-/reference_rixs_map.svg)
+
+This example RIXS map can be computed using scripts in [examples/rixs/cucn2_-](./examples/rixs/)
 
 ## Capabilities
 
@@ -23,10 +26,10 @@ Designing for all the different use-cases and approximations was difficult but r
    response. Supports providing two separate linear response calculations
    (manifolds) for $\alpha$ and $\beta$ perturbations. 
 3. **Resonant Inelastic X-ray Scattering (RIXS) maps**: using averaged
-   Kramers--Heisenberg equation, and transition moments from linear and quadratic
+   Kramers-Heisenberg equation, and transition moments from linear and quadratic
    response.
 4. **Spin-orbit (MP)-ZORA + analytic gradients**: The best relativistic correction.[^3]
-   scalar-relativistic is also allowed. Analytic gradients for generalized SCF methods
+   Scalar-relativistic is also allowed. Analytic gradients for generalized SCF methods
    require PySCF >=2.15 \[or master branch at time of writing\].
 6. **Core-Valence Separation (CVS)**: Supports direct-diagonalization. This is often
    much faster for conditions relevant to our work. Supports eliminating
