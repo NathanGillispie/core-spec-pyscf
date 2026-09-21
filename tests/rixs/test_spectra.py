@@ -1,7 +1,11 @@
 import pytest
 import numpy
 from pyscf.data.nist import ALPHA
-from pyscf.rixs import rixs_amplitudes, rixs_map
+from pyscf.rixs import (
+    rixs_amplitudes,
+    rixs_map,
+    select_significant_peaks,
+)
 
 @pytest.fixture(scope='module')
 def _state_pairs():
@@ -23,6 +27,29 @@ def test_rixs_amplitudes_nonzero_polarization_nyi(_state_pairs):
     f_mu_n, n_mu_0 = _state_pairs
     with pytest.raises(NotImplementedError):
         rixs_amplitudes(f_mu_n, n_mu_0, polarization_angle=10)
+
+
+def test_select_significant_peaks():
+    f_fn = numpy.array([[1.0, 10.0], [0.1, 5.0]])
+
+    numpy.testing.assert_array_equal(
+        select_significant_peaks(f_fn, threshold=.4),
+        numpy.array([[0, 1], [1, 1]]),
+    )
+
+
+def test_select_significant_peaks_returns_empty_for_zero_input():
+    numpy.testing.assert_array_equal(
+        select_significant_peaks(numpy.zeros((2, 3))),
+        numpy.empty((0, 2), dtype=int),
+    )
+
+
+def test_select_significant_peaks_rejects_invalid_input():
+    with pytest.raises(ValueError):
+        select_significant_peaks(numpy.ones(3))
+    with pytest.raises(ValueError):
+        select_significant_peaks(numpy.ones((2, 2)), threshold=-1)
 
 
 def test_rixs_map():

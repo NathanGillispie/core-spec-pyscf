@@ -6,6 +6,32 @@ from pyscf.data.nist import ALPHA
 from pyscf.rixs.response import _normalize_state_indices
 
 
+def select_significant_peaks(f_fn, threshold=1e-3):
+    '''Return pair indices whose magnitude exceeds a relative threshold.
+
+    Parameters
+    ----------
+    f_fn : array_like
+        Pair factors with shape ``(nfinal, nintermediate)``.
+    threshold : float, optional
+        Minimum fraction of the largest pair-factor magnitude. Defaults to
+        ``1e-3``.
+
+    Returns
+    -------
+    numpy.ndarray
+        Integer ``(final, intermediate)`` indices with shape ``(npeaks, 2)``.
+    '''
+    f_fn = numpy.asarray(f_fn)
+    if f_fn.ndim != 2:
+        raise ValueError('f_fn must be a two-dimensional array')
+    if threshold < 0:
+        raise ValueError('threshold must not be negative')
+
+    maximum = numpy.max(numpy.abs(f_fn), initial=0)
+    return numpy.argwhere(numpy.abs(f_fn) > threshold * maximum)
+
+
 def rixs_map(f_fn, intermediate_energies, final_energies,
              incident_energy, transfer_energy, *, peaks=None,
              incident_broadening=1.0, transfer_broadening=1.0,
