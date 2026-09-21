@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.5 - 2026-??-??
+## v0.5 - 2026-09-21
 
 ### Added
 
@@ -21,6 +21,7 @@
 - `rixs_amplitude` is the amplitude for terms in the Kramers-Heisenberg equation.
 - `rixs_map` computes the full map mesh from KH equation.
 - Computes ground-to-intermediate and intermediate-to-final states for you.
+- Dicyanocuprate example in `./examples/rixs/cucn2_-` with maps.
 
 **Other:**
 - Code coverage on CI and coverage badge in README.
@@ -29,7 +30,7 @@
 
 ### Fixed
 
-- CVS class no longer modifies your orbitals. It uses a mixin structure.
+- CVS class no longer modifies orbitals/energies. It uses a mixin structure.
 - GGA Eager Gxc memory estimate allocated way more memory than necessary.
 - No warning appeared when precompute_gxc and self.G is None.
 - `test` dirs were importable modules for editable installs.
