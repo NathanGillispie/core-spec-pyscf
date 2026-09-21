@@ -39,7 +39,7 @@ def test_no_fxc_hf_matches_rpa(ref):
 
 @pytest.mark.parametrize("ref", ["RKS", "UKS", "GKS"])
 def test_no_fxc_ks_tda_runs(ref):
-    mol = pyscf.M(atom='H 0 0 0; H 0 0 0.74', basis='3-21g', verbose=0)
+    mol = pyscf.M(atom='H 0 0 0; Li 0 0 1.1', basis='def2-SVP', verbose=0)
     mf = eval(f'pyscf.scf.{ref}(mol)')
     mf.xc = 'LDA'
     mf.kernel()
@@ -54,7 +54,7 @@ def test_no_fxc_ks_tda_runs(ref):
 
 @pytest.mark.parametrize("ref", ["RKS", "UKS", "GKS"])
 def test_no_fxc_ks_rpa_runs(ref):
-    mol = pyscf.M(atom='H 0 0 0; H 0 0 0.74', basis='3-21g', verbose=0)
+    mol = pyscf.M(atom='H 0 0 0; Li 0 0 1.1', basis='def2-SVP', verbose=0)
     mf = eval(f'pyscf.scf.{ref}(mol)')
     mf.xc = 'LDA'
     mf.kernel()
