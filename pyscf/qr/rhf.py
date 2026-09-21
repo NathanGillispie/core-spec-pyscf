@@ -405,7 +405,7 @@ class Gxc:
         return G
 
 
-def transition_dipole(qrobj, tdm):
+def transition_dipole(qrobj, tdm, dipole_mo=None):
     '''Returns transition dipole moment given excited-to-excited state 2TDM.
 
     Parameters
@@ -413,15 +413,18 @@ def transition_dipole(qrobj, tdm):
     self : QR object
     tdm : ndarray
         Excited-to-excited state transition density matrix.
+    dipole_mo : ndarray, optional
+        Precomputed length-gauge dipole integrals in the MO basis.
 
     Returns
     -------
     tdip : ndarray
         Dipole (x,y,z) components.
     '''
-    ints = compute_dipole_mo(qrobj.mol, qrobj.mo_coeff)
+    if dipole_mo is None:
+        dipole_mo = compute_dipole_mo(qrobj.mol, qrobj.mo_coeff)
     # Factor of 2 for the beta-spin contribution (closed-shell reference).
-    return numpy.einsum('xpq,pq->x', ints, tdm) * 2
+    return numpy.einsum('xpq,pq->x', dipole_mo, tdm) * 2
 
 
 def oscillator_strength(qrobj, i, j, tdm=None):
