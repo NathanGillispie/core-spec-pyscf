@@ -14,17 +14,14 @@ Assign the return value (``td = td.cvs(...)``). Importing this module attaches
 ``.cvs`` to :class:`pyscf.tdscf.rhf.TDBase`.
 '''
 
-from pyscf import lib
+import copy
+
+from pyscf import lib, scf
 from pyscf.lib import logger
 from pyscf.scf import uhf as scf_uhf
 from pyscf.scf import ghf as scf_ghf
 
 from pyscf.cvs._utils import core_valence_restricted, core_valence_unrestricted
-from pyscf.cvs.no_fxc import (
-    get_ab_no_fxc_ghf,
-    get_ab_no_fxc_rhf,
-    get_ab_no_fxc_uhf,
-)
 
 
 def _mro_names(td):
@@ -39,6 +36,10 @@ def is_tda(td):
     return 'TDA' in names
 
 
+def is_casida(td):
+    return 'CasidaTDDFT' in _mro_names(td)
+
+
 def is_ghf_td(td):
     return isinstance(td._scf, scf_ghf.GHF)
 
@@ -47,15 +48,17 @@ def is_uhf_td(td):
     return isinstance(td._scf, scf_uhf.UHF) and not is_ghf_td(td)
 
 
+def _get_no_fxc_mf(tdobj):
+    '''Return a response-only mean-field object for no_fxc calculations.'''
+    mf = tdobj._scf
+    if not isinstance(mf, scf.hf.KohnShamDFT):
+        return mf
+    return mf.to_hf()
+
+
 def _get_ab(tdobj, no_fxc=False):
     frozen = getattr(tdobj, 'frozen', None)
-    mf = tdobj._scf
-    if no_fxc:
-        if is_uhf_td(tdobj):
-            return get_ab_no_fxc_uhf(mf, frozen=frozen)
-        if is_ghf_td(tdobj):
-            return get_ab_no_fxc_ghf(mf, frozen=frozen)
-        return get_ab_no_fxc_rhf(mf, frozen=frozen)
+    mf = _get_no_fxc_mf(tdobj) if no_fxc else tdobj._scf
     return tdobj.get_ab(mf=mf, frozen=frozen)
 
 
@@ -102,13 +105,51 @@ class CVS:
 
     def get_ab(self, mf=None, frozen=None):
         if mf is None:
-            mf = self._scf
+            mf = _get_no_fxc_mf(self) if self.no_fxc else self._scf
         if frozen is None:
             frozen = self.frozen
         if is_ghf_td(self):
             from pyscf.tdscf.ghf import get_ab as ghf_get_ab
             return ghf_get_ab(mf, frozen=frozen)
         return super().get_ab(mf=mf, frozen=frozen)
+
+    def gen_response(self, *args, **kwargs):
+        if not self.no_fxc:
+            return super().gen_response(*args, **kwargs)
+        kwargs = dict(kwargs)
+        kwargs['with_nlc'] = False
+        return _get_no_fxc_mf(self).gen_response(*args, **kwargs)
+
+    def gen_vind(self, mf=None):
+        if not self.no_fxc:
+            return super().gen_vind(mf)
+
+        response_td = copy.copy(self)
+        response_td._scf = _get_no_fxc_mf(self)
+        response_td.no_fxc = False
+        if is_casida(self):
+            if is_uhf_td(self):
+                from pyscf.tdscf.uhf import TDHF
+            elif is_ghf_td(self):
+                from pyscf.tdscf.ghf import TDHF
+            else:
+                from pyscf.tdscf.rhf import TDHF
+            return TDHF.gen_vind(response_td, response_td._scf)
+        return super(CVS, response_td).gen_vind(response_td._scf)
+
+    def get_init_guess(self, mf, nstates=None, wfnsym=None,
+                       return_symmetry=False):
+        if self.no_fxc and is_casida(self):
+            if is_uhf_td(self):
+                from pyscf.tdscf.uhf import TDHF
+            elif is_ghf_td(self):
+                from pyscf.tdscf.ghf import TDHF
+            else:
+                from pyscf.tdscf.rhf import TDHF
+            return TDHF.get_init_guess(
+                self, mf, nstates, wfnsym, return_symmetry)
+        return super().get_init_guess(
+            mf, nstates, wfnsym, return_symmetry)
 
     def kernel(self, x0=None, nstates=None, core_idx=None, core_window=None,
                no_fxc=None, direct_diag=None):
@@ -133,9 +174,6 @@ class CVS:
             self.core_valence(core_window=core_window)
         elif core_idx is not None:
             self.core_valence(core_idx)
-        if no_fxc and not direct_diag:
-            logger.warn(self, 'No fxc requested. Using direct diagonalization.')
-            direct_diag = True
         self.no_fxc = no_fxc
         self.direct_diag = direct_diag
 
@@ -147,6 +185,14 @@ class CVS:
             kwargs['x0'] = x0
         if nstates is not None:
             kwargs['nstates'] = nstates
+        if no_fxc and is_casida(self):
+            if is_uhf_td(self):
+                from pyscf.tdscf.uhf import TDHF
+            elif is_ghf_td(self):
+                from pyscf.tdscf.ghf import TDHF
+            else:
+                from pyscf.tdscf.rhf import TDHF
+            return TDHF.kernel(self, **kwargs)
         return super().kernel(**kwargs)
 
     def _direct_diag_kernel(self, x0=None, nstates=None, no_fxc=False):
@@ -177,7 +223,8 @@ def cvs(td, core_idx=None, core_window=None, no_fxc=None, direct_diag=None):
         core_window : ``(emin, emax)`` energy window for occupied core MOs
             (UHF also accepts separate alpha and beta windows)
         no_fxc : bool
-            Drop the XC kernel; always uses direct diagonalization.
+            No exchange-correlation contributions; converts KS to HF without
+            modifying the mean-field or td object.
         direct_diag : bool
             Diagonalize the A/B matrices with ``numpy.linalg.eigh``.
 

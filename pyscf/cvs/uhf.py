@@ -3,15 +3,13 @@ import numpy
 from scipy.linalg import sqrtm
 
 from pyscf.lib import logger
-from .no_fxc import get_ab_no_fxc_uhf
+from .td import _get_no_fxc_mf
 from ._utils import _resolve_nstates
 
 
 def _get_ab(tdobj, no_fxc=False):
     frozen = getattr(tdobj, 'frozen', None)
-    mf = tdobj._scf
-    if no_fxc:
-        return get_ab_no_fxc_uhf(mf, frozen=frozen)
+    mf = _get_no_fxc_mf(tdobj) if no_fxc else tdobj._scf
     return tdobj.get_ab(mf=mf, frozen=frozen)
 
 

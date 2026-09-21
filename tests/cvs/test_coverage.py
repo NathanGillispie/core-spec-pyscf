@@ -423,11 +423,11 @@ def test_kernel_x0_passthrough():
     assert td.e is not None
 
 
-def test_no_fxc_forces_direct_diag():
+def test_no_fxc_direct_diag_is_optional():
     mf = _he('RKS', xc='PBE')
-    td = TDA(mf).cvs(no_fxc=True)
+    td = TDA(mf).cvs(no_fxc=True, direct_diag=False)
     td.kernel(nstates=1)
-    assert td.direct_diag is True
+    assert td.direct_diag is False
     assert td.e is not None
 
 

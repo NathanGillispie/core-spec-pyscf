@@ -42,5 +42,6 @@
 - Tests moved from `pyscf/*/test` to `tests/*`.
 - CVS class now uses PySCF's builtin `frozen` attribute. Minimum PySCF version
   supported for CVS is 2.7.
+- `no_fxc` now supports Davidson diagonalization as well as direct diag.
 - Default `n_states` for CVS is now (nocc*nvirt) when using `direct_diag`.
 - Use Y=0 convention for TDA, following PySCF conventions.

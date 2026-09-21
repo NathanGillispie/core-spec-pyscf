@@ -222,13 +222,13 @@ PySCF convention.
 For UHF/UKS, `core_window=(emin, emax)` applies to both spins. Separate windows
 can be supplied as `((emin_alpha, emax_alpha), (emin_beta, emax_beta))`.
 
-To disable the $f_\text{xc}$ term, pass `no_fxc=True`. The same syntax is used
-for direct diagonalization (`direct_diag`). Direct diagonalization is always
-used with `no_fxc`.
+To disable the $f_\text{xc}$ term, pass `no_fxc=True`. This uses an HF-like
+kernel for response methods without modifying the underlying mean-field or
+TD object. Supports both Davidson and direct diagonalization via `direct_diag=True`.
 ```py
 import pyscf.cvs
 
-tdobj = TDHF(mf).cvs(no_fxc=True, direct_diag=True)
+tdobj = TDHF(mf).cvs(no_fxc=True)
 tdobj.kernel()
 ```
 
