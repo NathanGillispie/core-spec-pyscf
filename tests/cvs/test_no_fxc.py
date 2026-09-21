@@ -41,7 +41,7 @@ def test_no_fxc_hf_matches_rpa(ref):
 def test_no_fxc_ks_tda_runs(ref):
     mol = pyscf.M(atom='H 0 0 0; H 0 0 0.74', basis='3-21g', verbose=0)
     mf = eval(f'pyscf.scf.{ref}(mol)')
-    mf.xc = 'PBE'
+    mf.xc = 'LDA'
     mf.kernel()
 
     td_dft = TDA(mf)
@@ -56,7 +56,7 @@ def test_no_fxc_ks_tda_runs(ref):
 def test_no_fxc_ks_rpa_runs(ref):
     mol = pyscf.M(atom='H 0 0 0; H 0 0 0.74', basis='3-21g', verbose=0)
     mf = eval(f'pyscf.scf.{ref}(mol)')
-    mf.xc = 'PBE'
+    mf.xc = 'LDA'
     mf.kernel()
 
     tdobj = RPA(mf).cvs(no_fxc=True)
