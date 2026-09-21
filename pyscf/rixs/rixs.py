@@ -5,8 +5,8 @@ quantities built from them.
 '''
 
 from pyscf import lib
-
-from pyscf.qr.hf import QR as QRBase
+from pyscf.qr.dipole import compute_dipole_mo as _compute_dipole_mo
+from pyscf.qr.rhf import RQR
 
 from pyscf.rixs import chkfile as _chkfile
 from pyscf.rixs.response import (
@@ -26,9 +26,9 @@ class RIXS(lib.StreamObject):
     }
 
     def __init__(self, mf, qr, *, chkfile=None):
-        if not isinstance(qr, QRBase):
+        if not isinstance(qr, RQR):
             raise TypeError(
-                f'qr must be a QR driver, got {type(qr).__name__}')
+                f'qr must be an RQR driver, got {type(qr).__name__}')
         if qr.mf is not mf:
             raise ValueError('mf and qr must use the same mean-field object')
 
@@ -37,6 +37,15 @@ class RIXS(lib.StreamObject):
         self.mol = mf.mol
         self.chkfile = chkfile if chkfile is not None else qr.chkfile
         self.dipole_mo = None
+
+    def _get_dipole_mo(self):
+        '''Return MO dipole integrals, computing them on first use.'''
+        if self.dipole_mo is None:
+            self.dipole_mo = _compute_dipole_mo(
+                self.mol,
+                self.qr.mo_coeff,
+            )
+        return self.dipole_mo
 
     def save(self, chkfile=None):
         '''Write this RIXS calculation to a checkpoint file.'''
@@ -63,6 +72,7 @@ class RIXS(lib.StreamObject):
             self.qr.mo_occ,
             self.qr.manifold_n,
             states,
+            dipole_mo=self._get_dipole_mo(),
         )
 
     @classmethod

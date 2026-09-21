@@ -5,9 +5,9 @@ from scipy.linalg import block_diag
 
 from pyscf import lib, scf
 from pyscf import ao2mo
-from pyscf.tdscf.rhf import _charge_center
 
 from pyscf.qr.hf import QR
+from pyscf.qr.dipole import compute_dipole_mo
 from pyscf.qr.intermediates import CasidaIntermediates
 from pyscf.qr.manifold import gxc_tensor_shape
 
@@ -419,11 +419,7 @@ def transition_dipole(qrobj, tdm):
     tdip : ndarray
         Dipole (x,y,z) components.
     '''
-    mol = qrobj.mol
-    coeff = qrobj.mo_coeff
-    with mol.with_common_orig(_charge_center(mol)):
-        ints_ao = mol.intor_symmetric('int1e_r', comp=3)
-    ints = numpy.einsum('xpq,pi,qa->xia', ints_ao, coeff, coeff)
+    ints = compute_dipole_mo(qrobj.mol, qrobj.mo_coeff)
     # Factor of 2 for the beta-spin contribution (closed-shell reference).
     return numpy.einsum('xpq,pq->x', ints, tdm) * 2
 

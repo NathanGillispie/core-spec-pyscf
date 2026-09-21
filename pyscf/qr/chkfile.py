@@ -8,10 +8,7 @@ the ``qr/`` namespace.  ``mol``, ``mo_coeff``, and the mean-field object are
 
 from pyscf import lib
 
-# needed for save_dip_mo
-from pyscf.tdscf.rhf import _charge_center
-import numpy
-
+from pyscf.qr.dipole import compute_dipole_mo
 from pyscf.qr.manifold import Manifold
 
 
@@ -55,12 +52,7 @@ def load_manifold_m(chkfile, mf, manifold_n):
 def save_dipole_mo(chkfile, mf, dip_mo=None):
     '''Save the dipole moment integrals in the MO basis to `qr/dipole_mo`.'''
     if dip_mo is None:
-        mol = mf.mol
-        coeff = mf.mo_coeff
-        with mol.with_common_orig(_charge_center(mol)):
-            dip_ao = mol.intor_symmetric('int1e_r', comp=3)
-        dip_mo = numpy.einsum('xpq,pr,qs->xrs',
-                              dip_ao, coeff.conj(), coeff)
+        dip_mo = compute_dipole_mo(mf.mol, mf.mo_coeff)
 
     lib.chkfile.save(chkfile, _qr_key('dipole_mo'), dip_mo)
     return dip_mo

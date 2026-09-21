@@ -6,7 +6,7 @@ from pyscf.tdscf import TDA
 
 import pyscf.qr
 import pyscf.zora
-from pyscf.qr import QR
+from pyscf.qr import QR, compute_dipole_mo
 from pyscf.rixs import RIXS
 from pyscf.zora.zora import ZORA_SCF
 
@@ -56,6 +56,24 @@ def test_ground_transition_dipoles():
     expected = td.transition_dipole()[[state]].T
 
     numpy.testing.assert_allclose(actual, expected)
+
+
+def test_ground_transition_dipoles_lazily_cache_mo_dipoles():
+    mf = _make_mf()
+    td = TDA(mf).set(nstates=1)
+    rixs = RIXS(mf, QR(td))
+
+    assert rixs.dipole_mo is None
+    rixs.ground_transition_dipoles([0])
+    dipole_mo = rixs.dipole_mo
+    assert dipole_mo is not None
+    numpy.testing.assert_allclose(
+        dipole_mo,
+        compute_dipole_mo(mf.mol, mf.mo_coeff),
+    )
+
+    rixs.ground_transition_dipoles([0])
+    assert rixs.dipole_mo is dipole_mo
 
 
 def test_checkpoint_roundtrip(tmp_path):

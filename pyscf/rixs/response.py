@@ -2,11 +2,7 @@
 
 import numpy
 
-
-def _charge_center(mol):
-    charges = mol.atom_charges()
-    coords = mol.atom_coords()
-    return numpy.einsum('z,zr->r', charges, coords) / charges.sum()
+from pyscf.qr.dipole import compute_dipole_mo
 
 
 def select_states(energies, window):
@@ -41,7 +37,8 @@ def select_states(energies, window):
     return numpy.flatnonzero((energies >= low) & (energies <= high))
 
 
-def ground_transition_dipoles(mol, mo_coeff, mo_occ, manifold, states=None):
+def ground_transition_dipoles(mol, mo_coeff, mo_occ, manifold, states=None,
+                              dipole_mo=None):
     '''Compute ground-to-excited transition dipoles from a LR manifold.
 
     Parameters
@@ -56,6 +53,9 @@ def ground_transition_dipoles(mol, mo_coeff, mo_occ, manifold, states=None):
         Linear-response manifold containing the excited-state amplitudes.
     states : array_like of int, optional
         0-based state indices.  Defaults to all states in ``manifold``.
+    dipole_mo : ndarray, optional
+        Precomputed length-gauge dipole integrals in the MO basis.  When
+        omitted, they are computed from ``mol`` and ``mo_coeff``.
 
     Returns
     -------
@@ -80,14 +80,10 @@ def ground_transition_dipoles(mol, mo_coeff, mo_occ, manifold, states=None):
     occ_idx = numpy.flatnonzero(mo_occ == 2)
     virt_idx = numpy.flatnonzero(mo_occ == 0)
 
-    with mol.with_common_orig(_charge_center(mol)):
-        dip_ao = mol.intor_symmetric('int1e_r', comp=3)
-    dip_ov = numpy.einsum(
-        'xpq,pi,qa->xia',
-        dip_ao,
-        mo_coeff[:, occ_idx],
-        mo_coeff[:, virt_idx],
-    )
+    if dipole_mo is None:
+        dipole_mo = compute_dipole_mo(mol, mo_coeff)
+    dipole_mo = numpy.asarray(dipole_mo)
+    dip_ov = dipole_mo[:, occ_idx][:, :, virt_idx]
 
     dipoles = []
     for state in states:

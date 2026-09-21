@@ -31,6 +31,7 @@ reference implementations.
 '''
 
 from pyscf.qr.hf import QR, qr_class_for_mf
+from pyscf.qr.dipole import compute_dipole_mo
 from pyscf.qr.manifold import Manifold, gxc_tensor_shape
 from pyscf.qr.rhf import RQR, Gxc
 from pyscf.qr.uhf import UQR
@@ -47,6 +48,7 @@ __all__ = [
     'GQR',
     'Gxc',
     'gxc_tensor_shape',
+    'compute_dipole_mo',
 ]
 
 __author__ = "Nathan Gillispie"
