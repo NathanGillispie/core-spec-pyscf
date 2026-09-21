@@ -1,14 +1,13 @@
-# Cobalt RIXS example
+# Dicyanocuprate RIXS example
 
 This directory demonstrates an end-to-end quadratic-response RIXS workflow
-using a cobalt atom in `cobalt_2p3d`. The Co is d<sup>6</sup> configured, so
-it is closed-shell with valence-3d orbitals. Perturbative spin-orbit ZORA is
+using $\ce{[Cu(CN)2]-}$ in `cucn2_-`. Perturbative spin-orbit ZORA is
 not yet supported, and generalized SCF is not supported for RIXS yet.
 
 The example is intended to show how the plugin connects:
 
 1. ZORA DFT reference
-2. CVS-TDA calculations for the Co 2p and 3d manifolds
+2. CVS-TDA calculations for the 2p and 3d manifolds
 3. ground and excited transition dipoles
 4. state-pair evaluation
 5. peak selection and
@@ -16,23 +15,26 @@ The example is intended to show how the plugin connects:
 
 ## Files
 
-`cobalt_2p3d/tdrks_2p3d.py`
+`cucn2_-/tdrks_2p3d.py`
 : Runs the SCF calculation, stability analysis, and CVS-TDA calculations.
   It constructs the QR/RIXS object and saves the combined checkpoint and a
   Molden orbital file. It also writes intermediate-manifold XAS sticks for
   `gen_spectra.py`.
 
-`cobalt_2p3d/quadratic_rixs_map.py`
+`cucn2_-/quadratic_rixs_map.py`
 : Loads the combined checkpoint, selects intermediate and final states using
   eV windows, computes the selected transition dipoles and RIXS pair factors,
   writes a CSV of significant peaks, and optionally creates a map and slice
   plots. Use `--no-plot` to stop after the numerical calculation and CSV
   output.
 
-`cobalt_2p3d/gen_spectra.py`
+`cucn2_-/gen_spectra.py`
 : Optional plotting utility for CSV files containing excitation energies and
   oscillator strengths. It applies Cauchy broadening and writes an SVG XAS
   spectrum. It is separate from the RIXS map calculation.
+
+`cucn2_-/reference_*.svg`
+: These are SVGs showing what the output would look like.
 
 ## Dependencies
 
@@ -56,7 +58,7 @@ mode does not require it.
 Run the commands from this directory:
 
 ```bash
-cd examples/rixs/cobalt_2p3d
+cd examples/rixs/cucn2_-
 python tdrks_2p3d.py
 ```
 

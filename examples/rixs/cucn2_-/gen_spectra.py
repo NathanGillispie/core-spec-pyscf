@@ -5,7 +5,7 @@ File that creates an SVG for csv files containing energy of transition
 (w) in first column and oscillator strengths (f) in second column.
 '''
 
-TITLE = 'Co³⁻ XAS ZORA (no SO)'
+TITLE = '[Cu(CN)₂]⁻ XAS ZORA (no SO)'
 
 import sys
 import numpy as np

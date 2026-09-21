@@ -12,21 +12,23 @@ import pyscf.qr
 import pyscf.rixs
 
 NAME = 'tdrks_2p3d'
-MANIFOLD1 = range(2,5) # Co 2p
-MANIFOLD2 = range(9,14) # Co 3d
+MANIFOLD1 = range(2,5) # Cd 2p
+MANIFOLD2 = numpy.array([15,17,18,19,23,24,25,26,27]) # Cd 3d
 QR_CHECKPOINT = NAME + '_qr.chk'
 XAS_CSV = 'sticks_' + NAME + '.csv'
 
 
 def get_mol():
-    basis = {
-       'Co': gto.basis.load('def2-TZVP', 'Co'),
-    }
-
     return gto.M(
-        atom = 'Co 0 0 0',
-        basis=basis,
-        charge = -3,
+        atom = '''
+            Cu     0.00000000   0.00000000   0.00000000
+            C      1.89147372   0.00000000   0.00000000
+            C     -1.89147371   0.00000000   0.00000000
+            N      3.05889691   0.00000000   0.00000000
+            N     -3.05889691   0.00000000   0.00000000
+        ''',
+        basis='def2-SVP',
+        charge = -1,
         spin = 0,
         verbose = 4,
     )
@@ -38,16 +40,6 @@ def get_mf():
     return dft.RKS(mol, xc='PBE0').set(max_cycle=200).zora()
 
 
-def _guess_dm(mf):
-    """If has guess from optimize, use it. Returns a density matrix."""
-    import os
-    if os.path.exists('optimize.chk'):
-        d = {'key': 'chkfile', 'chkfile':'optimize.chk'}
-    else:
-        d = {'key': 'atom'}
-    return mf.get_init_guess(**d)
-
-
 def kernel(mf=None, stability_iter=3):
     """Guess orbitals, run kernel, (stability), analyze, save molden.
 
@@ -55,8 +47,7 @@ def kernel(mf=None, stability_iter=3):
     stability_iter can be set to 0 to turn off stability analysis.
     """
     mf = mf or get_mf()
-    dm = _guess_dm(mf)
-    e_tot = mf.kernel(dm)
+    e_tot = mf.kernel()
     # Ensure the molecular orbitals are stable.
     for i in range(stability_iter):
         print(f'   stability analysis: iter {i+1}')

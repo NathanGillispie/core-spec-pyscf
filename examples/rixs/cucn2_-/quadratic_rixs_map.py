@@ -23,24 +23,24 @@ from pyscf.rixs import (
 # State-selection windows.  Only states inside these windows are included in
 # the response calculation.  These should be broad enough for all maps that
 # will be plotted from this calculation.
-INTERMEDIATE_STATE_WINDOW = (750, 800)  # eV
-FINAL_STATE_WINDOW = (1, 5)  # eV
+INTERMEDIATE_STATE_WINDOW = (920, 960)  # eV
+FINAL_STATE_WINDOW = (3, 16)  # eV
 
 # Plotting windows.  These can be changed without changing which states were
 # selected for the response calculation above.
-INCIDENT = (775, 783)  # eV
-TRANSFER = (2, 6)  # eV
+INCIDENT = (934.5, 943.5)  # eV
+TRANSFER = (4.5, 12.5)  # eV
 
 # Any number of slices is allowed.
-T_SLICE = (3.8, 4.4)
-I_SLICE = (779.5,)
+T_SLICE = (6.4, 8.5)
+I_SLICE = (937.5, 939.6)
 NPOINTS = 400
 
 PRECOMPUTE_GXC = False
 NAME = 'tdrks_2p3d'
 QR_CHECKPOINT = NAME + '_qr.chk'
 FILENAME = NAME + '_rixs_map'
-TITLE = 'Co³⁻'
+TITLE = '[Cu(CN)₂]⁻'
 
 args = sys.argv[1:]
 NO_PLOT = '--no-plot' in args
@@ -146,10 +146,11 @@ def _layout_figure(fig):
         bottom=0.14,
         top=0.90,
     )
+    fig.tight_layout(pad=1.5, w_pad=2.0)
 
 
 def plot_map(X, Y, Z):
-    fig, ax = plt.subplots(1, 1, figsize=(5, 5))
+    fig, ax = plt.subplots(1, 1, figsize=(5.5, 4.5))
 
     cmap = cm.summer
     norm = cm.colors.Normalize(vmin=abs(Z).min(), vmax=abs(Z).max())
@@ -206,7 +207,7 @@ _SLICE_CURVE_STYLES = (
 def plot_slices(X, Y, Z):
     if len(I_SLICE) == 0 or len(T_SLICE) == 0:
         raise ValueError("Must provide slices")
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8, 4))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
     slice_idxs = np.asarray([
         np.argmin(np.abs(X[0] - I_SLICE[i])) for i in range(len(I_SLICE))
     ])
