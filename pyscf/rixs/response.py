@@ -2,10 +2,25 @@
 
 import numpy
 
+from pyscf.data.nist import HARTREE2EV
 from pyscf.qr.dipole import compute_dipole_mo
 
 
-def select_states(energies, window):
+def _to_hartree(energies, unit):
+    try:
+        unit = unit.lower()
+    except AttributeError as err:
+        raise ValueError(f'unsupported energy unit: {unit!r}') from err
+
+    if unit in ('au', 'ha', 'hartree'):
+        return energies
+    if unit == 'ev':
+        return energies / HARTREE2EV
+    raise ValueError(f'unsupported energy unit: {unit!r}')
+
+
+def select_states(energies, window, *, energies_unit='au',
+                  window_unit=None):
     '''Return indices of states within an inclusive energy window.
 
     Parameters
@@ -13,8 +28,11 @@ def select_states(energies, window):
     energies : array_like
         One-dimensional state energies.
     window : 2-tuple
-        Lower and upper bounds in the same units as ``energies``.  PySCF
-        energies are normally expressed in Hartree.
+        Lower and upper bounds.
+    energies_unit : {'au', 'ha', 'hartree', 'eV'}, optional
+        Units of ``energies``. Defaults to Hartree atomic units.
+    window_unit : {'au', 'ha', 'hartree', 'eV'}, optional
+        Units of ``window``. Defaults to ``energies_unit``.
 
     Returns
     -------
@@ -31,6 +49,13 @@ def select_states(energies, window):
     except (TypeError, ValueError) as err:
         raise ValueError('window must contain exactly two bounds') from err
 
+    if window_unit is None:
+        window_unit = energies_unit
+    energies = _to_hartree(energies, energies_unit)
+    low, high = _to_hartree(
+        numpy.asarray((low, high), dtype=float),
+        window_unit,
+    )
     if low > high:
         raise ValueError('window lower bound must not exceed upper bound')
 
