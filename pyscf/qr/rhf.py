@@ -286,7 +286,7 @@ class Gxc:
             return self
         if self.G is None:
             self.G = numpy.zeros(self._gxc_shape)
-        _precompute_gxc(mf, self.G, self.occ_idx_n, self.occ_idx_m)
+            _precompute_gxc(mf, self.G, self.occ_idx_n, self.occ_idx_m)
         return self
 
     def contract_v(self, mf, xpy1, xpy2, mo_occ=None):
