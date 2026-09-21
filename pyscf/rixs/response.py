@@ -6,6 +6,24 @@ from pyscf.data.nist import HARTREE2EV
 from pyscf.qr.dipole import compute_dipole_mo
 
 
+def _normalize_state_indices(states, size, name):
+    if states is None:
+        return numpy.arange(size, dtype=int)
+
+    states = numpy.atleast_1d(numpy.asarray(states))
+    if states.ndim != 1:
+        raise ValueError(f'{name} must be a one-dimensional array')
+    if not numpy.issubdtype(states.dtype, numpy.integer):
+        raise ValueError(f'{name} must contain integer state indices')
+
+    states = states.astype(int, copy=False)
+    if numpy.any(states < 0) or numpy.any(states >= size):
+        raise IndexError(
+            f'{name} contains an index outside [0, {size})'
+        )
+    return states
+
+
 def _to_hartree(energies, unit):
     try:
         unit = unit.lower()

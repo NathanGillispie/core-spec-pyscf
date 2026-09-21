@@ -1,6 +1,7 @@
 import pytest
 import numpy
-from pyscf.rixs import rixs_amplitudes
+from pyscf.data.nist import ALPHA
+from pyscf.rixs import rixs_amplitudes, rixs_map
 
 @pytest.fixture(scope='module')
 def _state_pairs():
@@ -22,4 +23,31 @@ def test_rixs_amplitudes_nonzero_polarization_nyi(_state_pairs):
     f_mu_n, n_mu_0 = _state_pairs
     with pytest.raises(NotImplementedError):
         rixs_amplitudes(f_mu_n, n_mu_0, polarization_angle=10)
+
+
+def test_rixs_map():
+    X, Y, Z = rixs_map(
+        numpy.array([[2.0]]),
+        numpy.array([3.0]),
+        numpy.array([1.0]),
+        numpy.array([2.0]),
+        numpy.array([1.0]),
+    )
+
+    expected = .5 * 2 * (3 * (1 - 3) * ALPHA) ** 2 / (1 + .25)
+    assert X.shape == (1, 1)
+    assert Y.shape == (1, 1)
+    numpy.testing.assert_allclose(Z, expected)
+
+
+def test_rixs_map_rejects_out_of_range_peaks():
+    with pytest.raises(IndexError, match='peak final states'):
+        rixs_map(
+            numpy.array([[2.0]]),
+            numpy.array([3.0]),
+            numpy.array([1.0]),
+            numpy.array([2.0]),
+            numpy.array([1.0]),
+            peaks=[(1, 0)],
+        )
 

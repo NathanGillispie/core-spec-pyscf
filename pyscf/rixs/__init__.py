@@ -2,6 +2,6 @@
 
 from pyscf.rixs.rixs import RIXS
 from pyscf.rixs.response import select_states
-from pyscf.rixs.spectra import rixs_amplitudes
+from pyscf.rixs.spectra import rixs_amplitudes, rixs_map
 
-__all__ = ['RIXS', 'select_states', 'rixs_amplitudes']
+__all__ = ['RIXS', 'select_states', 'rixs_amplitudes', 'rixs_map']

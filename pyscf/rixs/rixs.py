@@ -12,27 +12,9 @@ from pyscf.qr.rhf import RQR
 
 from pyscf.rixs import chkfile as _chkfile
 from pyscf.rixs.response import (
+    _normalize_state_indices,
     ground_transition_dipoles as _ground_transition_dipoles,
 )
-
-
-def _normalize_state_indices(states, size, name):
-    if states is None:
-        return numpy.arange(size, dtype=int)
-
-    states = numpy.atleast_1d(numpy.asarray(states))
-    if states.ndim != 1:
-        raise ValueError(f'{name} must be a one-dimensional array')
-    if not numpy.issubdtype(states.dtype, numpy.integer):
-        raise ValueError(f'{name} must contain integer state indices')
-
-    states = states.astype(int, copy=False)
-    if numpy.any(states < 0) or numpy.any(states >= size):
-        raise IndexError(
-            f'{name} contains an index outside [0, {size})'
-        )
-    return states
-
 
 class RIXS(lib.StreamObject):
     '''Container for a mean-field reference and a QR calculation.'''
