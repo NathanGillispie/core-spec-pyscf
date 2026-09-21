@@ -4,6 +4,8 @@ Stores QR and mean-field references and provides RIXS-specific response
 quantities built from them.
 '''
 
+import numpy
+
 from pyscf import lib
 from pyscf.qr.dipole import compute_dipole_mo as _compute_dipole_mo
 from pyscf.qr.rhf import RQR
@@ -12,6 +14,24 @@ from pyscf.rixs import chkfile as _chkfile
 from pyscf.rixs.response import (
     ground_transition_dipoles as _ground_transition_dipoles,
 )
+
+
+def _normalize_state_indices(states, size, name):
+    if states is None:
+        return numpy.arange(size, dtype=int)
+
+    states = numpy.atleast_1d(numpy.asarray(states))
+    if states.ndim != 1:
+        raise ValueError(f'{name} must be a one-dimensional array')
+    if not numpy.issubdtype(states.dtype, numpy.integer):
+        raise ValueError(f'{name} must contain integer state indices')
+
+    states = states.astype(int, copy=False)
+    if numpy.any(states < 0) or numpy.any(states >= size):
+        raise IndexError(
+            f'{name} contains an index outside [0, {size})'
+        )
+    return states
 
 
 class RIXS(lib.StreamObject):
@@ -74,6 +94,69 @@ class RIXS(lib.StreamObject):
             states,
             dipole_mo=self._get_dipole_mo(),
         )
+
+    def transition_dipoles(self, intermediate_states=None, final_states=None):
+        '''Return selected intermediate-to-final transition dipoles.
+
+        Parameters
+        ----------
+        intermediate_states : array_like of int, optional
+            0-based indices into ``qr.manifold_n``.  Defaults to all states.
+        final_states : array_like of int, optional
+            0-based indices into ``qr.manifold_m``.  Defaults to all states.
+
+        Returns
+        -------
+        ndarray
+            Transition dipoles with shape
+            ``(3, len(final_states), len(intermediate_states))``.
+
+        Notes
+        -----
+        The QR stage is evaluated only after the requested states have been
+        validated.  Eager QR objects are prepared here as well; repeated
+        preparation is a no-op.
+        '''
+        n_states = _normalize_state_indices(
+            intermediate_states,
+            len(self.qr.manifold_n.e),
+            'intermediate_states',
+        )
+        f_states = _normalize_state_indices(
+            final_states,
+            len(self.qr.manifold_m.e),
+            'final_states',
+        )
+
+        dtype = numpy.result_type(self.qr.mo_coeff.dtype, numpy.float64)
+        if len(n_states) == 0 or len(f_states) == 0:
+            return numpy.empty(
+                (3, len(f_states), len(n_states)),
+                dtype=dtype,
+            )
+
+        self.qr.kernel()
+        dipole_mo = self._get_dipole_mo()
+        log = lib.logger.new_logger(self)
+
+        dipoles = numpy.empty(
+            (3, len(f_states), len(n_states)),
+            dtype=dtype,
+        )
+        for f_pos, f_state in enumerate(f_states):
+            for n_pos, n_state in enumerate(n_states):
+                log.info(
+                    'RIXS dipole f=%d, n=%d',
+                    f_state,
+                    n_state,
+                )
+                tdm = self.qr.get_2tdm(int(n_state), int(f_state))
+                dipoles[:, f_pos, n_pos] = self.qr.transition_dipole(
+                    tdm,
+                    dipole_mo=dipole_mo,
+                )
+
+        return dipoles
 
     @classmethod
     def from_chk(cls, chkfile, mf, *, precompute_gxc=False):

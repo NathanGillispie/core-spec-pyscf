@@ -76,6 +76,34 @@ def test_ground_transition_dipoles_lazily_cache_mo_dipoles():
     assert rixs.dipole_mo is dipole_mo
 
 
+def test_transition_dipoles_selected_pair():
+    mf = _make_mf()
+    td = TDA(mf).set(nstates=1)
+    rixs = RIXS(mf, QR(td))
+
+    actual = rixs.transition_dipoles([0], [0])
+    tdm = rixs.qr.get_2tdm(0, 0)
+    expected = rixs.qr.transition_dipole(
+        tdm,
+        dipole_mo=rixs.dipole_mo,
+    )
+
+    assert actual.shape == (3, 1, 1)
+    numpy.testing.assert_allclose(actual[:, 0, 0], expected)
+
+
+def test_transition_dipoles_prepares_eager_qr():
+    mf = _make_mf()
+    td = TDA(mf).set(nstates=1)
+    qr = QR(td, precompute_gxc=True)
+    rixs = RIXS(mf, qr)
+
+    actual = rixs.transition_dipoles([0], [0])
+
+    assert actual.shape == (3, 1, 1)
+    assert qr._gxc_backend.G is not None
+
+
 def test_checkpoint_roundtrip(tmp_path):
     chkfile = str(tmp_path / 'rixs.chk')
     rixs = _make_rixs(_make_mf(), chkfile=chkfile)
