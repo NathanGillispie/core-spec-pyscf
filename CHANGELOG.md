@@ -17,8 +17,10 @@
 
 **RIXS:**
 - Added `pyscf.rixs` module and `RIXS` class.
-- checkpoint save/load. Requires QR and mf object.
-- `rixs_amplitude` computes amplitude from Kramers-Heisenberg equation.
+- checkpoint save/load. Requires QR and mf object. Compatible with `ZORA_SCF` objects.
+- `rixs_amplitude` is the amplitude for terms in the Kramers-Heisenberg equation.
+- `rixs_map` computes the full map mesh from KH equation.
+- Computes ground-to-intermediate and intermediate-to-final states for you.
 
 **Other:**
 - Code coverage on CI and coverage badge in README.
@@ -31,6 +33,7 @@
 - GGA Eager Gxc memory estimate allocated way more memory than necessary.
 - No warning appeared when precompute_gxc and self.G is None.
 - `test` dirs were importable modules for editable installs.
+- precomputing Gxc was not idempotent.
 
 ### Changed
 

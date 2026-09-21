@@ -6,7 +6,7 @@ from pyscf.data.nist import ALPHA
 from pyscf.rixs.response import _normalize_state_indices
 
 
-def select_significant_peaks(f_fn, threshold=1e-3):
+def select_significant_peaks(f_fn, threshold=1e-4):
     '''Return pair indices whose magnitude exceeds a relative threshold.
 
     Parameters
