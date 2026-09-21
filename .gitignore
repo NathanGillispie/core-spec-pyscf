@@ -1,3 +1,11 @@
+# Intermediate files produced from RIXS calculations
+*.chk
+*.log
+*.pkl
+*.svg
+*.csv
+*.molden
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
