@@ -38,7 +38,7 @@ def test_public_api_and_reference_validation():
     assert rixs.mol is mf.mol
     assert rixs.chkfile == rixs.qr.chkfile
 
-    with pytest.raises(TypeError, match='QR driver'):
+    with pytest.raises(NotImplementedError, match='Only RQR driver'):
         RIXS(mf, object())
     with pytest.raises(ValueError, match='same mean-field'):
         RIXS(_make_mf(), rixs.qr)

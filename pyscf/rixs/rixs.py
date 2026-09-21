@@ -27,8 +27,8 @@ class RIXS(lib.StreamObject):
 
     def __init__(self, mf, qr, *, chkfile=None):
         if not isinstance(qr, RQR):
-            raise TypeError(
-                f'qr must be an RQR driver, got {type(qr).__name__}')
+            raise NotImplementedError(
+                f'Only RQR driver supported. Got {type(qr).__name__}.')
         if qr.mf is not mf:
             raise ValueError('mf and qr must use the same mean-field object')
 
