@@ -11,8 +11,8 @@ work.
 This project initially began because PySCF had no support for ZORA or CVS. v0.4 
 added support for quadratic response. That coalesced all of the features I created
 across different Python scripts. Notably, I had different code for full QR without
-ZORA, CVS, or TDA; and QR with all of those. Designing for all the different
-use-cases and approximations was a fun puzzle.
+ZORA, CVS, or TDA; and approximated QR with all of those. Designing for all the
+different use-cases and approximations was a fun puzzle.
 
 ![Example RIXS map of cyanocuprate](examples/rixs/cucn2_-/reference_rixs_map.svg)
 
