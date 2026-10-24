@@ -155,6 +155,13 @@ def test_eager_gxc_allocates_buffer(he_mf):
     assert qr._gxc_backend.G is not None
 
 
+def test_zero_approximation_skips_eager_gxc(he_mf):
+    td = RPA(he_mf).set(nstates=1)
+    td.kernel()
+    qr = QR(td, precompute_gxc=True, approximation='Zero').kernel()
+    assert qr._gxc_backend.G is None
+
+
 def test_contract_v_requires_kernel_when_precompute_gxc(he_mf):
     td = RPA(he_mf).set(nstates=1)
     td.kernel()

@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.6 - In Progress
+
+### Fixed
+
+- `'Zero'` RQR approximation was computing Gxc by default. This slipped by
+  because I didn't notice the slowdown for smaller test molecules.
+
 ## v0.5 - 2026-09-21
 
 ### Added

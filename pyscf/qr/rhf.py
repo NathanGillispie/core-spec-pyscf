@@ -473,7 +473,8 @@ class RQR(QR):
         log = lib.logger.new_logger(self)
         log.info('QR kernel: manifolds ready (n=%d, m=%d states)',
                  len(self._manifold_n.e), len(self._manifold_m.e))
-        if self.precompute_gxc:
+        # Don't compute Gxc for Zero approximation. (TODO: fix code smell here)
+        if self.precompute_gxc and self.approximation != 'Zero':
             log.info('QR kernel: precomputing Gxc (%s)',
                      self._gxc_backend._gxc_shape)
             self._gxc_backend.precompute(self._scf)
