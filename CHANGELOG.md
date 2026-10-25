@@ -6,6 +6,12 @@
 
 - `'Zero'` RQR approximation was computing Gxc by default. This slipped by
   because I didn't notice the slowdown for smaller test molecules.
+- Memory usage in RQR `_compute_c` was unnecessarily large due to full ERI MO
+  contraction. First index was always occupied.
+
+### Changed
+
+- RQR logs memory usage with verbose=4.
 
 ## v0.5 - 2026-09-21
 

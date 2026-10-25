@@ -54,8 +54,7 @@ def _precompute_gxc(mf, G, occ_idx_n, occ_idx_m):
     make_rho = ni._gen_rho_evaluator(mol, dm0, hermi=1, with_lapl=False)[0]
 
     mem_now = lib.current_memory()[-1]
-    max_memory = max(2000, 40000 * .9 - mem_now)
-    max_memory *= 30  # Experimental constant
+    max_memory = max(2000, mf.max_memory * .9 - mem_now)
     mf.grids.build()
 
     # yapf: disable
@@ -152,6 +151,7 @@ def _compute_c(mf):
     mo_coeff = mf.mo_coeff
     mo_occ = mf.mo_occ
     mol = mf.mol
+    log = lib.logger.new_logger(mf)
 
     nao, nmo = mo_coeff.shape
     occidx = numpy.where(mo_occ == 2)[0]
@@ -165,8 +165,15 @@ def _compute_c(mf):
     C = numpy.zeros((nocc, nvir, nmo, nmo))
 
     def add_hf_(c1, hyb=1):
-        eri_mo = ao2mo.general(mol, [mo, mo, mo, mo], compact=False)
-        eri_mo = eri_mo.reshape(nmo, nmo, nmo, nmo)
+        eri_shape = (nocc, nmo, nmo, nmo)
+        eri_gib = numpy.prod(eri_shape) * mo_coeff.dtype.itemsize / 1024**3
+        log.info(
+            'QR memory: before full four-index MO ERI transformation; '
+            'C shape=%s (%.2f GiB), eri_mo shape=%s (%.2f GiB)',
+            c1.shape, c1.nbytes / 1024**3, eri_shape, eri_gib,
+        )
+        eri_mo = ao2mo.general(mol, [orbo, mo, mo, mo], compact=False)
+        eri_mo = eri_mo.reshape(*eri_shape)
         c1 += numpy.einsum('iapq->iapq', eri_mo[:nocc, nocc:]) * 2
         c1 -= numpy.einsum('iqpa->iapq', eri_mo[:nocc, :, :, nocc:]) * hyb
 
@@ -212,6 +219,14 @@ def _compute_c(mf):
             iapq = numpy.einsum('xpqr,riax->iapq', w_xx, rho_ov,
                                 optimize=True) * 2
             C += iapq
+            log.info(
+                'QR memory: after GGA XC block %d; '
+                'C shape=%s (%.2f GiB), iapq shape=%s (%.2f GiB)',
+                block, C.shape, C.nbytes / 1024**3,
+                iapq.shape, iapq.nbytes / 1024**3,
+            )
+            # don't let large buffers coexist during the next allocation.
+            del rho, fxc, wfxc, rho_ov, rho_xx, w_xx, iapq
     elif xctype == 'LDA':
         ao_deriv = 0
         for ao, mask, weight, coords in ni.block_loop(mol, mf.grids, nao,
