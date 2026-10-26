@@ -217,7 +217,8 @@ def _compute_c(mf):
 
             w_xx = numpy.einsum('rpqx,xyr->ypqr', rho_xx, wfxc, optimize=True)
             iapq = numpy.einsum('xpqr,riax->iapq', w_xx, rho_ov,
-                                optimize=True) * 2
+                                optimize=True)
+            iapq *= 2
             C += iapq
             log.info(
                 'QR memory: after GGA XC block %d; '
@@ -239,7 +240,8 @@ def _compute_c(mf):
             rho_xx = numpy.einsum('rp,rq->rpq', rho, rho)
             rho_ov = rho_xx[:, :nocc, nocc:]
             w_ov = numpy.einsum('ria,r->ria', rho_ov, wfxc)
-            iapq = numpy.einsum('rpq,ria->iapq', rho_xx, w_ov) * 2
+            iapq = numpy.einsum('rpq,ria->iapq', rho_xx, w_ov)
+            iapq *= 2
             C += iapq
     else:
         raise NotImplementedError(f'xctype = {xctype}')
