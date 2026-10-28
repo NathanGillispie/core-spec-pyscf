@@ -174,8 +174,15 @@ def _compute_c(mf):
         )
         eri_mo = ao2mo.general(mol, [orbo, mo, mo, mo], compact=False)
         eri_mo = eri_mo.reshape(*eri_shape)
+        log.info(
+            'QR memory: after full four-index MO ERI transformation; '
+            'eri_mo shape=%s (%.2f GiB)',
+            eri_mo.shape, eri_mo.nbytes / 1024**3,
+        )
         c1 += numpy.einsum('iapq->iapq', eri_mo[:nocc, nocc:]) * 2
+        log.info('QR memory: after Coulomb contribution to C')
         c1 -= numpy.einsum('iqpa->iapq', eri_mo[:nocc, :, :, nocc:]) * hyb
+        log.info('QR memory: after exchange contribution to C')
 
     if not isinstance(mf, scf.hf.KohnShamDFT):
         add_hf_(C)
@@ -527,14 +534,16 @@ class RQR(QR):
         e2, (x2, y2) = self._manifold_m(j)
         tdm = _get_2tdm_diag_block(x1, x2, y1, y2)
         if self.approximation == 'Nascimento':  # TODO: to_lower str if not None
+            log.info('  Solving Casida eq. with Nascimento approx.')
             return tdm
 
+        log.info('  Computing LHS intermediates.')
         inter = self.intermediates
         C, Lambda, Delta = inter.C, inter.Lambda, inter.Delta
         nocc, nvirt = inter.nocc, inter.nvirt
 
-        log.info('  LHS of Casida eq. fully determined. Computing Gxc term.')
-
+        log.info('  Computing Gxc term.')
+        # This part is more likely to fail first compared to intermediates.
         if self.approximation == 'Zero':
             V = numpy.zeros((nocc, nvirt))
         else:
@@ -543,10 +552,11 @@ class RQR(QR):
             else:
                 V = self._gxc_backend.contract_v(self._scf, x1 + y1, x2 + y2)
 
-        log.info('  Gxc done. Determining RHS of Casida eq.')
-
+        log.info('  Computing P, Q.')
         Pia, Qia = _get_pq(C, tdm, V, x1, x2, y1, y2)
         pqm = numpy.reshape((Pia, Qia), -1)
+
+        log.info('  Casida eq. knowns fully determined.')
 
         if self.approximation == 'Pseudo':
             log.info('  Solving Casida eq. with ω = 0.')
