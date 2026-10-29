@@ -5,6 +5,7 @@ from scipy.linalg import block_diag
 
 from pyscf import lib, scf
 from pyscf import ao2mo
+from pyscf.dft.gen_grid import BLKSIZE
 
 from pyscf.qr.hf import QR
 from pyscf.qr.dipole import compute_dipole_mo
@@ -214,9 +215,44 @@ def _compute_c(mf):
 
     if xctype == 'GGA':
         ao_deriv = 1
-        for block, (ao, mask, weight,
-                    coords) in enumerate(ni.block_loop(mol, mf.grids, nao,
-                                                        ao_deriv, max_memory)):
+        mf.grids.build()
+        # At the largest point in this loop, rho_xx and w_xx coexist.  PySCF's
+        # default block estimate only budgets the AO buffer, so it can select
+        # a block that is far too large for these O(nmo**2) intermediates.
+        gga_bytes_per_grid = C.dtype.itemsize * (
+            4 * nao +                  # AO buffer
+            4 + 2 * 16 +               # density, fxc, and weighted fxc
+            4 * nmo +                  # MO values on the grid
+            8 * nmo**2                 # rho_xx and w_xx
+        )
+        # C is resident and counted in mem_now.  Reserve one C-sized buffer
+        # for the in-place-scaled ``iapq`` result before C += iapq.
+        available = (mf.max_memory * .8 - mem_now) * 1e6 - C.nbytes
+        block_units = int(available // gga_bytes_per_grid // BLKSIZE)
+        if block_units < 4:
+            raise MemoryError(
+                'Insufficient memory for the minimum GGA QR grid block: '
+                f'need at least {4 * BLKSIZE * gga_bytes_per_grid / 1e6:.0f} '
+                f'MB of workspace after allocating C and iapq'
+            )
+        max_units = max(4, (len(mf.grids.coords) + BLKSIZE - 1) // BLKSIZE)
+        blksize = min(block_units, max_units) * BLKSIZE
+        nblocks = (len(mf.grids.coords) + blksize - 1) // blksize
+        log.info(
+            'QR memory: GGA XC block size=%d grid points '
+            '(estimated workspace %.2f GiB)',
+            blksize, blksize * gga_bytes_per_grid / 1024**3,
+        )
+        log.info('QR memory: GGA XC integration will process %d blocks',
+                 nblocks)
+        for block, (ao, mask, weight, coords) in enumerate(
+                ni.block_loop(mol, mf.grids, nao, ao_deriv, max_memory,
+                              blksize=blksize)):
+            log.info(
+                'QR memory: before GGA XC block %d; ao shape=%s, '
+                'C shape=%s (%.2f GiB)',
+                block, ao.shape, C.shape, C.nbytes / 1024**3,
+            )
             rho = make_rho(0, ao, mask, xctype)
 
             fxc = ni.eval_xc_eff(mf.xc, rho, deriv=2, xctype=xctype)[2]
@@ -239,7 +275,9 @@ def _compute_c(mf):
                 block, C.shape, C.nbytes / 1024**3,
                 iapq.shape, iapq.nbytes / 1024**3,
             )
-            # don't let large buffers coexist during the next allocation.
+            # These names otherwise stay bound until their replacements in
+            # the next iteration are assigned.  That lets two grid blocks'
+            # rho_xx/w_xx buffers coexist during the next allocation.
             del rho, fxc, wfxc, rho_ov, rho_xx, w_xx, iapq
     elif xctype == 'LDA':
         ao_deriv = 0
@@ -382,8 +420,43 @@ class Gxc:
 
         if xctype == 'GGA':
             ao_deriv = 1
+            mf.grids.build()
+            # PySCF's default block estimate only accounts for the AO buffer.
+            # This contraction also keeps rho_ov, w_ov, and iajb, whose sizes
+            # are O(nocc * nvir * ngrids), alive at the same time.
+            #
+            # The factor 1.25 reserves room for einsum/libxc temporaries that
+            # are not represented by a named array below.
+            gga_bytes_per_grid = 1.25 * G.dtype.itemsize * (
+                4 * nao +                 # AO buffer
+                4 + 2 * 64 +              # rho, gxc, and wgxc
+                4 * nocc + 4 * nvir +     # rho_o and rho_v
+                8 +                       # xp1 and xp2
+                24 * nocc * nvir          # rho_ov, w_ov, and iajb
+            )
+            available = (mf.max_memory * .8 - mem_now) * 1e6 - G.nbytes
+            block_units = int(available // gga_bytes_per_grid // BLKSIZE)
+            if block_units < 4:
+                raise MemoryError(
+                    'Insufficient memory for the minimum lazy GGA Gxc grid '
+                    'block: need at least '
+                    f'{4 * BLKSIZE * gga_bytes_per_grid / 1e6:.0f} MB '
+                    'of workspace'
+                )
+            max_units = max(4, (len(mf.grids.coords) + BLKSIZE - 1) // BLKSIZE)
+            blksize = min(block_units, max_units) * BLKSIZE
+            nblocks = (len(mf.grids.coords) + blksize - 1) // blksize
+            log = lib.logger.new_logger(mf)
+            log.info(
+                'QR memory: lazy GGA Gxc block size=%d grid points '
+                '(estimated workspace %.2f GiB)',
+                blksize, blksize * gga_bytes_per_grid / 1024**3,
+            )
+            log.info('QR memory: lazy GGA Gxc will process %d blocks',
+                     nblocks)
             for ao, mask, weight, coords in ni.block_loop(
-                    mol, mf.grids, nao, ao_deriv, max_memory):
+                    mol, mf.grids, nao, ao_deriv, max_memory,
+                    blksize=blksize):
                 rho = make_rho(0, ao, mask, xctype)
                 gxc = ni.eval_xc_eff(mf.xc, rho, deriv=3, xctype=xctype)[3]
 
@@ -409,6 +482,9 @@ class Gxc:
                 iajbkc = numpy.einsum('xiar,rx->ia', iajb, xp2,
                                       optimize=True) * 4
                 G += iajbkc
+                # Ensure the previous grid block's large intermediates do
+                # not coexist with the next block while its arrays are made.
+                del rho, gxc, rho_o, rho_v, rho_ov, xp1, xp2, wgxc, w_ov, iajb, iajbkc
         elif xctype == 'LDA':
             ao_deriv = 0
             for ao, mask, weight, coords in ni.block_loop(
@@ -578,3 +654,240 @@ class RQR(QR):
         tdm[nocc:, :nocc] = _x2.T
 
         return tdm
+
+    def _transition_dipoles(self,
+                            intermediate_states=None,
+                            final_states=None,
+                            dipole_mo=None):
+        '''Compute selected excited-to-excited transition dipoles directly.
+
+        This is the RIXS-specific counterpart to :meth:`get_2tdm`.  It keeps
+        the pair-dependent Casida calculation, but contracts the diagonal and
+        solved off-diagonal 2TDM blocks directly with ``dipole_mo``.
+        '''
+        def normalize_states(states, size, name):
+            if states is None:
+                return numpy.arange(size, dtype=int)
+            states = numpy.atleast_1d(numpy.asarray(states))
+            if states.ndim != 1:
+                raise ValueError(f'{name} must be a one-dimensional array')
+            if not numpy.issubdtype(states.dtype, numpy.integer):
+                raise ValueError(f'{name} must contain integer state indices')
+            states = states.astype(int, copy=False)
+            if numpy.any(states < 0) or numpy.any(states >= size):
+                raise IndexError(
+                    f'{name} contains an index outside [0, {size})')
+            return states
+
+        n_states = normalize_states(
+            intermediate_states,
+            len(self._manifold_n.e),
+            'intermediate_states',
+        )
+        f_states = normalize_states(
+            final_states,
+            len(self._manifold_m.e),
+            'final_states',
+        )
+
+        dtype = numpy.result_type(self.mo_coeff.dtype, numpy.float64)
+        if len(n_states) == 0 or len(f_states) == 0:
+            if dipole_mo is not None:
+                dtype = numpy.result_type(dtype, dipole_mo)
+            return numpy.empty((3, len(f_states), len(n_states)),
+                               dtype=dtype)
+
+        if self.approximation not in ('Nascimento', 'Zero', 'Pseudo', None):
+            raise ValueError('Invalid approxiamtion requested! Options are '
+                             '\'Nascimento\', \'Zero\', \'Pseudo\', and None')
+
+        if dipole_mo is None:
+            dipole_mo = compute_dipole_mo(self.mol, self.mo_coeff)
+        dipole_mo = numpy.asarray(dipole_mo)
+        dtype = numpy.result_type(dtype, dipole_mo)
+
+        is_rpa = self.response_type == 'rpa'
+        if self.approximation == 'Nascimento':
+            Cflat = None
+            Coo = Cvv = None
+            nocc = int(numpy.count_nonzero(self.mo_occ > 0))
+            nvirt = int(numpy.count_nonzero(self.mo_occ == 0))
+            Lambda = Delta = None
+        else:
+            inter = self.intermediates
+            C = inter.C
+            nocc, nvirt = inter.nocc, inter.nvirt
+            nmo = C.shape[2]
+            Cflat = C.reshape(nocc * nvirt, nmo * nmo)
+
+            # Select the occupied-occupied and virtual-virtual entries from
+            # Cflat once.  These are the only C entries needed by the
+            # diagonal 2TDM blocks.
+            occ = numpy.arange(nocc)
+            virt = nocc + numpy.arange(nvirt)
+            oo_idx = (occ[:, None] * nmo + occ[None, :]).ravel()
+            vv_idx = (virt[:, None] * nmo + virt[None, :]).ravel()
+            Coo = Cflat[:, oo_idx]
+            Cvv = Cflat[:, vv_idx]
+            Lambda, Delta = inter.Lambda, inter.Delta
+
+        oo_slice = slice(nocc)
+        vv_slice = slice(nocc, nocc + nvirt)
+        dip_oo = dipole_mo[:, oo_slice, oo_slice]
+        dip_ov = dipole_mo[:, oo_slice, vv_slice]
+        dip_vo = dipole_mo[:, vv_slice, oo_slice]
+        dip_vv = dipole_mo[:, vv_slice, vv_slice]
+
+        aligned = {}
+
+        def get_aligned(manifold, state):
+            key = (id(manifold), int(state))
+            if key not in aligned:
+                aligned[key] = manifold(int(state))
+            return aligned[key]
+
+        n_data = {}
+        f_data = {}
+        for state in n_states:
+            state = int(state)
+            if state not in n_data:
+                e, (x, y) = get_aligned(self._manifold_n, state)
+                if Cflat is None:
+                    ha = None
+                else:
+                    ha = (x.ravel() @ Cflat).reshape(nmo, nmo).T
+                    if is_rpa:
+                        ha += (y.ravel() @ Cflat).reshape(nmo, nmo)
+                n_data[state] = (e, x, y, ha)
+        for state in f_states:
+            state = int(state)
+            if state not in f_data:
+                e, (x, y) = get_aligned(self._manifold_m, state)
+                if Cflat is None:
+                    hb = None
+                else:
+                    hb = (x.ravel() @ Cflat).reshape(nmo, nmo)
+                    if is_rpa:
+                        hb += (y.ravel() @ Cflat).reshape(nmo, nmo).T
+                f_data[state] = (e, x, y, hb)
+
+        dipoles = numpy.empty((3, len(f_states), len(n_states)), dtype=dtype)
+        n_records = [n_data[int(state)] for state in n_states]
+        f_records = [f_data[int(state)] for state in f_states]
+
+        if self.approximation == 'Nascimento':
+            for f_pos, (_, x2, y2, _) in enumerate(f_records):
+                for n_pos, (_, x1, y1, _) in enumerate(n_records):
+                    knm_oo = -(x1 @ x2.T)
+                    knm_vv = x2.T @ x1
+                    if is_rpa:
+                        knm_oo -= y2 @ y1.T
+                        knm_vv += y1.T @ y2
+                    dipoles[:, f_pos, n_pos] = 2 * (
+                        numpy.einsum('xij,ij->x', dip_oo, knm_oo,
+                                     optimize=True)
+                        + numpy.einsum('xab,ab->x', dip_vv, knm_vv,
+                                       optimize=True)
+                    )
+            return dipoles
+
+        # Keep the pair-dependent RHS buffers bounded while turning the C
+        # contractions into matrix-matrix products.
+        n_e = numpy.asarray([record[0] for record in n_records])
+        f_e = numpy.asarray([record[0] for record in f_records])
+        pair_f = numpy.repeat(numpy.arange(len(f_states)),
+                              len(n_states))
+        pair_n = numpy.tile(numpy.arange(len(n_states)),
+                            len(f_states))
+        pair_block_size = 32
+
+        for block_start in range(0, len(pair_f), pair_block_size):
+            block_stop = min(block_start + pair_block_size, len(pair_f))
+            f_idx = pair_f[block_start:block_stop]
+            n_idx = pair_n[block_start:block_stop]
+            x1 = numpy.stack([n_records[idx][1] for idx in n_idx])
+            x2 = numpy.stack([f_records[idx][1] for idx in f_idx])
+            ha = numpy.stack([n_records[idx][3] for idx in n_idx])
+            hb = numpy.stack([f_records[idx][3] for idx in f_idx])
+
+            knm_oo = -numpy.matmul(x1, x2.transpose(0, 2, 1))
+            knm_vv = numpy.matmul(x2.transpose(0, 2, 1), x1)
+            if is_rpa:
+                y1 = numpy.stack([n_records[idx][2] for idx in n_idx])
+                y2 = numpy.stack([f_records[idx][2] for idx in f_idx])
+                knm_oo -= numpy.matmul(y2, y1.transpose(0, 2, 1))
+                knm_vv += numpy.matmul(y1.transpose(0, 2, 1), y2)
+
+            tdip = (
+                numpy.einsum('xij,bij->bx', dip_oo, knm_oo,
+                             optimize=True)
+                + numpy.einsum('xab,pab->px', dip_vv, knm_vv,
+                               optimize=True)
+            )
+
+            if self.approximation == 'Zero':
+                V = numpy.zeros((block_stop - block_start, nocc, nvirt))
+            else:
+                V = []
+                for pair_pos in range(block_stop - block_start):
+                    if is_rpa:
+                        V.append(self._gxc_backend.contract_v(
+                            self._scf,
+                            x1[pair_pos] + y1[pair_pos],
+                            x2[pair_pos] + y2[pair_pos],
+                        ))
+                    else:
+                        V.append(self._gxc_backend.contract_v(
+                            self._scf, x1[pair_pos], x2[pair_pos]))
+                V = numpy.asarray(V)
+
+            Pia = (
+                knm_oo.reshape(len(f_idx), -1) @ Coo.T
+                + knm_vv.reshape(len(f_idx), -1) @ Cvv.T
+            ).reshape(len(f_idx), nocc, nvirt)
+            Qia = (
+                knm_oo.transpose(0, 2, 1).reshape(len(f_idx), -1) @ Coo.T
+                + knm_vv.transpose(0, 2, 1).reshape(len(f_idx), -1)
+                @ Cvv.T
+            ).reshape(len(f_idx), nocc, nvirt)
+            Pia += V
+            Qia += V
+
+            ha_oo = ha[:, oo_slice, oo_slice]
+            ha_vv = ha[:, vv_slice, vv_slice]
+            hb_oo = hb[:, oo_slice, oo_slice]
+            hb_vv = hb[:, vv_slice, vv_slice]
+            Pia += (
+                numpy.matmul(x2, ha_vv.transpose(0, 2, 1))
+                - numpy.matmul(ha_oo.transpose(0, 2, 1), x2)
+            )
+            Qia += numpy.matmul(x1, hb_vv) - numpy.matmul(hb_oo, x1)
+            if is_rpa:
+                Pia += (
+                    numpy.matmul(y1, hb_vv.transpose(0, 2, 1))
+                    - numpy.matmul(hb_oo.transpose(0, 2, 1), y1)
+                )
+                Qia += numpy.matmul(y2, ha_vv) - numpy.matmul(ha_oo, y2)
+
+            pqm = numpy.concatenate((Pia, Qia), axis=1).reshape(
+                len(f_idx), -1)
+            for pair_pos, (f_pos, n_pos) in enumerate(zip(f_idx, n_idx)):
+                if self.approximation == 'Pseudo':
+                    xym = numpy.linalg.solve(Lambda, -pqm[pair_pos])
+                else:
+                    omega = f_e[f_pos] - n_e[n_pos]
+                    xym = numpy.linalg.solve(
+                        Lambda - omega * Delta,
+                        -pqm[pair_pos],
+                    )
+                x_response, y_response = numpy.reshape(
+                    xym, (2, nocc, nvirt))
+                tdip_pair = tdip[pair_pos] + (
+                    numpy.einsum('xia,ia->x', dip_ov, y_response,
+                                 optimize=True)
+                    + numpy.einsum('xai,ia->x', dip_vo, x_response,
+                                   optimize=True)
+                )
+                dipoles[:, f_pos, n_pos] = 2 * tdip_pair
+
+        return dipoles

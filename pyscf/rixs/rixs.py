@@ -119,26 +119,11 @@ class RIXS(lib.StreamObject):
 
         self.qr.kernel()
         dipole_mo = self._get_dipole_mo()
-        log = lib.logger.new_logger(self)
-
-        dipoles = numpy.empty(
-            (3, len(f_states), len(n_states)),
-            dtype=dtype,
+        return self.qr._transition_dipoles(
+            n_states,
+            f_states,
+            dipole_mo=dipole_mo,
         )
-        for f_pos, f_state in enumerate(f_states):
-            for n_pos, n_state in enumerate(n_states):
-                log.info(
-                    'RIXS dipole f=%d, n=%d',
-                    f_state,
-                    n_state,
-                )
-                tdm = self.qr.get_2tdm(int(n_state), int(f_state))
-                dipoles[:, f_pos, n_pos] = self.qr.transition_dipole(
-                    tdm,
-                    dipole_mo=dipole_mo,
-                )
-
-        return dipoles
 
     @classmethod
     def from_chk(cls, chkfile, mf, *, precompute_gxc=False):
