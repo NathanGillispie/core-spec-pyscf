@@ -214,8 +214,9 @@ def _compute_c(mf):
 
     if xctype == 'GGA':
         ao_deriv = 1
-        for ao, mask, weight, coords in ni.block_loop(mol, mf.grids, nao,
-                                                      ao_deriv, max_memory):
+        for block, (ao, mask, weight,
+                    coords) in enumerate(ni.block_loop(mol, mf.grids, nao,
+                                                        ao_deriv, max_memory)):
             rho = make_rho(0, ao, mask, xctype)
 
             fxc = ni.eval_xc_eff(mf.xc, rho, deriv=2, xctype=xctype)[2]
