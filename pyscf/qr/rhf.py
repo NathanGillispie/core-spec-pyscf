@@ -116,17 +116,22 @@ def _get_pq(C, Knm, V, x1, x2, y1, y2):
     '''Create |P,Q>: RHS of casida-like eq. for QR'''
     is_tda = not isinstance(y1, numpy.ndarray)
     nocc, nvirt = C.shape[:2]
+    nmo = C.shape[2]
     oo = (slice(nocc), slice(nocc))
     vv = (slice(nocc, None), slice(nocc, None))
 
-    Pia = numpy.einsum('iapq,pq->ia', C, Knm) + V
-    Qia = numpy.einsum('iapq,pq->ia', C, Knm.T) + V
+    # Flatten the pair indices so these contractions can use BLAS GEMV.
+    # C is stored as (ia, pq), while the transposed Ha/Hb contractions below
+    # require the corresponding pq transpose after the matrix product.
+    Cflat = C.reshape(nocc * nvirt, nmo * nmo)
+    Pia = (Cflat @ Knm.ravel()).reshape(nocc, nvirt) + V
+    Qia = (Cflat @ Knm.T.ravel()).reshape(nocc, nvirt) + V
 
-    Ha = numpy.einsum('iaqp,ia->pq', C, x1)
-    Hb = numpy.einsum('iapq,ia->pq', C, x2)
+    Ha = (x1.ravel() @ Cflat).reshape(nmo, nmo).T
+    Hb = (x2.ravel() @ Cflat).reshape(nmo, nmo)
     if not is_tda:
-        Ha += numpy.einsum('iapq,ia->pq', C, y1)
-        Hb += numpy.einsum('iaqp,ia->pq', C, y2)
+        Ha += (y1.ravel() @ Cflat).reshape(nmo, nmo)
+        Hb += (y2.ravel() @ Cflat).reshape(nmo, nmo).T
 
     Pia += x2 @ Ha[vv].T - Ha[oo].T @ x2
     Qia += x1 @ Hb[vv] - Hb[oo] @ x1
